@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIQE Root Cause Diagnostic Report</title>
+<style>
+  @page {
+    size: A4;
+    margin: 12mm 14mm;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #1a1a1a;
+  }
+
+  /* ── HEADER BAND ── */
+  .report-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 2px solid #222;
+    margin-bottom: 14px;
+  }
+  .logo-placeholder {
+    width: 64px;
+    height: 64px;
+    border: 2px solid #333;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    margin-right: 16px;
+    flex-shrink: 0;
+  }
+  .header-text {
+    flex: 1;
+  }
+  .header-text h1 {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #111;
+    margin-bottom: 4px;
+  }
+  .header-meta {
+    font-size: 10px;
+    color: #333;
+    line-height: 1.6;
+  }
+  .header-meta strong {
+    color: #111;
+  }
+
+  /* ── SECTION BOXES ── */
+  .section-box {
+    border: 1.5px solid #ccc;
+    margin-bottom: 10px;
+    page-break-inside: avoid;
+  }
+  .section-title {
+    background: #e8e8e8;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #111;
+    border-bottom: 1.5px solid #ccc;
+  }
+  .section-body {
+    padding: 10px 12px;
+  }
+  .section-body p {
+    margin-bottom: 6px;
+    font-size: 10px;
+    line-height: 1.55;
+  }
+  .section-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ── HYPOTHESES ── */
+  .hypothesis-item {
+    margin-bottom: 8px;
+    padding-left: 4px;
+  }
+  .hypothesis-item:last-child {
+    margin-bottom: 0;
+  }
+  .hyp-header {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 2px;
+  }
+  .hyp-header .checkmark {
+    color: #333;
+    margin-right: 4px;
+  }
+  .hyp-rank {
+    font-weight: 700;
+  }
+  .hyp-description {
+    font-size: 9.5px;
+    color: #333;
+    padding-left: 20px;
+    line-height: 1.5;
+  }
+
+  /* ── TWO-COLUMN LAYOUT ── */
+  .two-col {
+    display: flex;
+    gap: 0;
+    margin-bottom: 10px;
+  }
+  .two-col .col {
+    flex: 1;
+    border: 1.5px solid #ccc;
+  }
+  .two-col .col:first-child {
+    border-right: none;
+  }
+  .col .section-title {
+    font-size: 10.5px;
+  }
+  .col .section-body {
+    padding: 8px 10px;
+  }
+
+  /* ── BULLET LISTS ── */
+  .check-list {
+    list-style: none;
+    padding: 0;
+  }
+  .check-list li {
+    padding: 3px 0 3px 18px;
+    position: relative;
+    font-size: 9.5px;
+    line-height: 1.5;
+  }
+  .check-list li::before {
+    content: "\2713";
+    position: absolute;
+    left: 0;
+    font-weight: 700;
+    color: #333;
+  }
+  .numbered-list {
+    padding-left: 4px;
+    list-style: none;
+    counter-reset: actions;
+  }
+  .numbered-list li {
+    padding: 3px 0;
+    font-size: 9.5px;
+    line-height: 1.5;
+    counter-increment: actions;
+  }
+  .numbered-list li::before {
+    content: counter(actions) ". ";
+    font-weight: 700;
+    color: #111;
+  }
+
+  /* ── CONFIDENCE FOOTER ── */
+  .confidence-footer {
+    border: 1.5px solid #ccc;
+    margin-bottom: 8px;
+  }
+  .confidence-footer .section-title {
+    font-size: 10.5px;
+  }
+  .confidence-footer .section-body {
+    padding: 8px 12px;
+    font-size: 9.5px;
+    line-height: 1.55;
+  }
+
+  /* ── AUDIT STRIP ── */
+  .audit-strip {
+    font-size: 7.5px;
+    color: #999;
+    border-top: 1px solid #ddd;
+    padding-top: 4px;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="report-header">
+  <div class="logo-placeholder">
+    AIQE<br>LOGO
+  </div>
+  <div class="header-text">
+    <h1>ROOT CAUSE DIAGNOSTIC REPORT</h1>
+    <div class="header-meta">
+      <strong>Part / Process:</strong>&nbsp; {{ header.part_process }}<br>
+      <strong>Analysis Confidence:</strong>&nbsp; {{ header.analysis_confidence.value }}&nbsp;&nbsp;&nbsp;&nbsp;
+      {{ header.defect_symptom }}
+    </div>
+  </div>
+</div>
+
+<!-- EXECUTIVE DIAGNOSTIC SUMMARY -->
+<div class="section-box">
+  <div class="section-title">Executive Diagnostic Summary</div>
+  <div class="section-body">
+    {% for para in executive_summary_paragraphs %}
+    <p>{{ para }}</p>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- MOST LIKELY ROOT CAUSE HYPOTHESES (RANKED) -->
+<div class="section-box">
+  <div class="section-title">Most Likely Root Cause Hypotheses (Ranked)</div>
+  <div class="section-body">
+    {% for hyp in hypotheses %}
+    <div class="hypothesis-item">
+      <div class="hyp-header">
+        <span class="checkmark">&#10003;</span>
+        <span>{{ hyp.name }}</span>
+        (<span class="hyp-rank">{{ hyp.rank }}</span>)
+      </div>
+      <div class="hyp-description">{{ hyp.description }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- TWO-COLUMN: WHY AIQE BELIEVES THIS + IMMEDIATE ACTIONS -->
+<div class="two-col">
+  <div class="col">
+    <div class="section-title">Why AIQE Believes This</div>
+    <div class="section-body">
+      <ul class="check-list">
+        {% for bullet in why_bullets %}
+        <li>{{ bullet }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col">
+    <div class="section-title">Immediate Actions to Test</div>
+    <div class="section-body">
+      {% if actions_intro %}
+      <p style="font-size:9px; margin-bottom:6px;">{{ actions_intro }}</p>
+      {% endif %}
+      <ol class="numbered-list">
+        {% for action in action_items %}
+        <li>{{ action }}</li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIDENCE / NEXT STEPS FOOTER -->
+<div class="confidence-footer">
+  <div class="section-title">Analysis Confidence Statement</div>
+  <div class="section-body">
+    {{ confidence_statement }}
+  </div>
+</div>
+
+<!-- AUDIT STRIP -->
+<div class="audit-strip">
+  Input Hash: {{ input_hash }} &nbsp;|&nbsp; Generated: {{ timestamp }} &nbsp;|&nbsp; AIQE Phase 2 — Deterministic RCA Engine
+</div>
+
+</body>
+</html>

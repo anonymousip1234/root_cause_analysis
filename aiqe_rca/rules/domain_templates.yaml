@@ -1,0 +1,237 @@
+# AIQE Phase 2 — Domain Templates for Manufacturing RCA
+# Each template represents a known failure pattern category.
+# The hypothesis builder matches evidence + problem statement against these templates.
+
+templates:
+  - id: TMPL_SURFACE_PREP
+    name: "Surface Preparation / Contamination"
+    description: "Failure related to inadequate or inconsistent surface preparation before bonding, coating, or assembly."
+    keywords:
+      - surface
+      - contamination
+      - cleaning
+      - wipe
+      - prep
+      - preparation
+      - residue
+      - degreasing
+      - degrease
+      - solvent
+      - cleanliness
+      - adhesion
+      - bond failure
+      - blistering
+      - wet-out
+      - primer
+      - phosphate
+      - ATP
+      - swab
+    typical_evidence_categories:
+      - PC  # Process control
+      - DA  # Detection/audit
+    amplifier_conditions:
+      - "extended dwell time between prep and next step"
+      - "high humidity during storage"
+      - "inconsistent operator practice"
+
+  - id: TMPL_PROCESS_PARAM
+    name: "Process Parameter Variation"
+    description: "Failure related to variation in key process parameters such as temperature, pressure, time, or speed."
+    keywords:
+      - cure
+      - temperature
+      - temp
+      - pressure
+      - time
+      - cycle
+      - oven
+      - bake
+      - dwell
+      - speed
+      - feed rate
+      - parameter
+      - setpoint
+      - SPC
+      - out of control
+      - out of spec
+      - variation
+      - shift
+      - drift
+      - profile
+    typical_evidence_categories:
+      - PV  # Performance/variation
+      - PC  # Process control
+    amplifier_conditions:
+      - "no SPC monitoring on critical parameter"
+      - "manual parameter entry"
+
+  - id: TMPL_MATERIAL_HANDLING
+    name: "Material Handling / Storage Degradation"
+    description: "Failure related to improper handling, storage, or shelf-life management of materials."
+    keywords:
+      - storage
+      - shelf life
+      - shelf-life
+      - expiration
+      - expired
+      - handling
+      - staging
+      - WIP
+      - dock
+      - humidity
+      - moisture
+      - exposure
+      - container
+      - open container
+      - adhesive
+      - material
+      - lot
+      - batch
+      - degradation
+    typical_evidence_categories:
+      - PC  # Process control
+      - RC  # Response/corrective
+    amplifier_conditions:
+      - "proximity to environmental exposure (dock doors, outdoor staging)"
+      - "missing shelf-life tracking"
+
+  - id: TMPL_EQUIPMENT_CONDITION
+    name: "Equipment Condition / Mechanical Wear"
+    description: "Failure related to equipment degradation, vibration, wear, or maintenance gaps."
+    keywords:
+      - machine
+      - equipment
+      - vibration
+      - chatter
+      - wear
+      - maintenance
+      - downtime
+      - tooling
+      - tool change
+      - tool wear
+      - spindle
+      - fixture
+      - alignment
+      - calibration
+      - bearing
+      - mechanical
+    typical_evidence_categories:
+      - PV  # Performance/variation
+      - DA  # Detection/audit
+    amplifier_conditions:
+      - "reactive maintenance only"
+      - "missing preventive maintenance records"
+      - "operator-reported symptoms ignored"
+
+  - id: TMPL_HUMAN_DISCIPLINE
+    name: "Human / Procedural Discipline"
+    description: "Failure related to operator non-compliance, training gaps, or shift-specific discipline issues."
+    keywords:
+      - operator
+      - shift
+      - 2nd shift
+      - second shift
+      - training
+      - compliance
+      - non-compliance
+      - skipping
+      - skipped
+      - manual
+      - discipline
+      - audit
+      - finding
+      - procedure
+      - work instruction
+      - busy
+      - line
+      - human
+      - error
+    typical_evidence_categories:
+      - DA  # Detection/audit
+      - PC  # Process control
+    amplifier_conditions:
+      - "high production volume periods"
+      - "understaffing"
+
+  - id: TMPL_ENVIRONMENTAL
+    name: "Environmental Exposure"
+    description: "Failure related to environmental conditions such as humidity, temperature, or contaminant exposure during processing or storage."
+    keywords:
+      - humidity
+      - temperature
+      - environment
+      - environmental
+      - ambient
+      - weather
+      - seasonal
+      - dock
+      - outdoor
+      - moisture
+      - condensation
+      - climate
+      - salt spray
+      - corrosion
+      - underbody
+    typical_evidence_categories:
+      - PV  # Performance/variation
+    amplifier_conditions:
+      - "no environmental monitoring"
+      - "open facility areas"
+
+  - id: TMPL_DESIGN_GEOMETRY
+    name: "Design / Geometry Sensitivity"
+    description: "Failure related to product design features that create difficulty in manufacturing or inspection."
+    keywords:
+      - geometry
+      - edge
+      - corner
+      - sharp
+      - weld
+      - complex
+      - coverage
+      - thin
+      - thick
+      - tolerance
+      - design
+      - drawing
+      - DFMEA
+      - specification
+      - critical
+      - dimension
+      - bore
+      - machined
+    typical_evidence_categories:
+      - DR  # Design/requirements
+    amplifier_conditions:
+      - "no design-for-manufacturing review"
+      - "tight tolerances without capability study"
+
+  - id: TMPL_DETECTION_GAP
+    name: "Detection / Inspection Gap"
+    description: "Failure escapes due to inadequate or infrequent inspection, sampling, or detection methods."
+    keywords:
+      - inspection
+      - detection
+      - sampling
+      - frequency
+      - visual
+      - leak test
+      - measurement
+      - gauge
+      - CMM
+      - control plan
+      - PFMEA
+      - risk
+      - severity
+      - occurrence
+      - escape
+      - customer
+      - return
+      - complaint
+      - field failure
+    typical_evidence_categories:
+      - DA  # Detection/audit
+      - DR  # Design/requirements
+    amplifier_conditions:
+      - "low sampling frequency"
+      - "visual-only detection for critical characteristics"

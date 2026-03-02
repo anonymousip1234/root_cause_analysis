@@ -1,0 +1,125 @@
+# AIQE Phase 2 — Language Rules
+# Defines allowed and disallowed language patterns per report section.
+# The language lint engine checks report output against these rules.
+
+global_disallowed:
+  # Absolute / certainty terms
+  - "proves"
+  - "proven"
+  - "definitely"
+  - "certainly"
+  - "guarantees"
+  - "guaranteed"
+  - "undoubtedly"
+  - "without question"
+  - "root cause is"
+  - "the cause is"
+  - "the root cause"
+  # Directive / prescriptive verbs (ordering actions)
+  - "you must"
+  - "you should"
+  - "you need to"
+  - "immediately"
+  - "implement"
+  - "deploy"
+  - "install"
+  - "change to"
+  - "set to"
+  - "replace with"
+  # Blame / attribution
+  - "fault of"
+  - "blame"
+  - "responsible for"
+  - "negligence"
+  - "failure to comply"
+  # Math / scoring terms
+  - "score"
+  - "weight"
+  - "penalty"
+  - "equation"
+  - "formula"
+  - "calculate"
+  - "multiply"
+  - "subtract"
+  - "threshold"
+  - "algorithm"
+  # Percentage / numeric confidence
+  - "% confidence"
+  - "percent confidence"
+  - "probability"
+  - "likelihood score"
+
+sections:
+  executive_diagnostic_summary:
+    max_paragraphs: 2
+    allowed_patterns:
+      - "The observed pattern is consistent with"
+      - "Evidence suggests"
+      - "may be contributing"
+      - "Confidence is limited by"
+      - "consistent with"
+      - "pattern linking"
+    disallowed_patterns:
+      - "This proves"
+      - "Root cause is definitely"
+      - "You must"
+      - "You should"
+    fallback: "Summary limited: available inputs do not contain enough structured evidence to produce a reliable synthesis."
+
+  contributing_hypotheses:
+    format: "bulleted"
+    allowed_patterns:
+      - "Primary contributor:"
+      - "Primary Contributor:"
+      - "Secondary contributor:"
+      - "Secondary Contributor:"
+      - "Conditional amplifier:"
+      - "Conditional Amplifier:"
+    disallowed_patterns:
+      - "confidence %"
+      - "score"
+      - "weight="
+      - "penalty factor"
+      - "subtract"
+    fallback: "No defensible hypotheses can be ranked from the current inputs."
+
+  why_aiqe_believes_this:
+    format: "bulleted"
+    allowed_patterns:
+      - "indicates"
+      - "consistent with"
+      - "suggests"
+      - "aligns with"
+      - "conflicts with"
+      - "contradicts"
+    disallowed_patterns:
+      - "Therefore the cause is"
+      - "This guarantees"
+    fallback: "Evidence mapping unavailable: inputs could not be parsed into traceable evidence elements."
+
+  immediate_actions_to_test:
+    max_items: 5
+    allowed_patterns:
+      - "Focus investigation on"
+      - "Priority is distinguishing"
+      - "Log and compare"
+      - "Perform a short-term trial"
+      - "Correlate"
+      - "Compare"
+      - "Track"
+    disallowed_patterns:
+      - "Inspect station"
+      - "Change parameter"
+      - "Set value to"
+    fallback: "Investigation focus cannot be prioritized until additional targeted evidence is available."
+
+  analysis_confidence_statement:
+    allowed_values:
+      - "Low"
+      - "Medium"
+      - "High"
+    disallowed_patterns:
+      - "%"
+      - "score"
+      - "probability"
+    fallback: "Insufficient evidence to state this reliably."

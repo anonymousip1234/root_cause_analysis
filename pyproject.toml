@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "aiqe-rca-engine"
+version = "0.1.0"
+description = "AIQE Phase 2 - Deterministic Root Cause Analysis Engine"
+authors = ["swapnonil <swapnonil@m46brands.com>"]
+readme = "README.md"
+packages = [{include = "aiqe_rca"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.34.0"}
+pdfplumber = "^0.11.0"
+python-docx = "^1.1.0"
+openpyxl = "^3.1.0"
+pytesseract = "^0.3.13"
+Pillow = "^11.0.0"
+sentence-transformers = "^3.3.0"
+pydantic = "^2.10.0"
+pydantic-settings = "^2.7.0"
+weasyprint = "^63.0"
+Jinja2 = "^3.1.0"
+PyYAML = "^6.0"
+openai = "^1.60.0"
+httpx = "^0.28.0"
+python-multipart = "^0.0.20"
+aiofiles = "^24.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.25.0"
+ruff = "^0.9.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

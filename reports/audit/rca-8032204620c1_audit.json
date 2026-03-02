@@ -1,0 +1,36 @@
+{
+  "input_hash": "92a44285153995a4603672e4ff64eedc01d69c5f0cc5a38c40d16df169394f16",
+  "timestamp": "2026-02-25T10:11:55.204120+00:00",
+  "trace_map": [
+    {
+      "source_file": "Test03_SPC_MachiningReport.pdf",
+      "evidence_ids": [
+        "E-139acf21-bf66-5f14-9fff-c3d4a0074325",
+        "E-c42c47dd-4752-56eb-bf1f-14bff224d9fc",
+        "E-f798512b-5431-5287-b379-a268f3f647b4",
+        "E-e22483e9-376b-5314-b8bf-71aa265b967b",
+        "E-4d87bb1e-9138-5ded-a2b4-d0d2142ab76b",
+        "E-19292db4-542f-522b-aac5-bc14eeb4a083",
+        "E-ba8c17bd-de93-5235-bdc3-c2c6b2584a36",
+        "E-130120f3-8653-5c56-bbab-51d3b907343e",
+        "E-a11cc5ab-4871-515c-b9b4-3b3a3c4fac71",
+        "E-c5092e1b-faf4-53bc-ad78-e3e2363b6a4b",
+        "E-79cd59e2-41ab-51a3-97be-b7987f4eddf1",
+        "E-139463aa-93b0-5b5d-8495-1ff7fc41a78d",
+        "E-e9240355-7782-52e9-b0bd-b1970d2e7e52",
+        "E-99e7f5fe-d826-5b87-89ec-e970f461010e",
+        "E-f9be7681-fd39-5137-b857-0651410d7d0e",
+        "E-883e6117-9ddf-56f4-b2b0-8968426619c8",
+        "E-9c50f0a5-7cd8-5195-a94e-242708c3810e",
+        "E-060ba565-68c2-5074-abd5-23c9e4f4fd4a",
+        "E-778dfb87-5c1d-57d3-8d47-69515983d2b9",
+        "E-e0bd7530-339e-5b3f-b045-ee5aa0e8ff9d",
+        "E-2c97bf9e-2b75-5b1d-9c81-83a6fdbca1ae"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "Test03_SPC_MachiningReport.pdf"
+  ]
+}

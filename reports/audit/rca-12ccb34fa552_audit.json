@@ -1,0 +1,159 @@
+{
+  "input_hash": "d70b4c9f0c5f12ebaad06900090cf5768f858c716606b7fb24e74073581b01dc",
+  "timestamp": "2026-02-25T12:03:40.047338+00:00",
+  "trace_map": [
+    {
+      "source_file": "Test01_AcceptanceCriteria.xlsx",
+      "evidence_ids": [
+        "E-a3365bdf-40ca-5799-8769-3d594c5393a6",
+        "E-6c8eabec-f21b-52e5-a6c1-61c866c0794e",
+        "E-1f44765f-d265-59a8-9ed0-09dc031322e4",
+        "E-21fb1c88-89f4-550a-81c2-69ab87473f25",
+        "E-bc515187-1a05-5eef-8894-32d60bb2067e",
+        "E-6b7b2172-d498-5523-8ade-cb7063736f02"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_ControlPlan_FULL.xlsx",
+      "evidence_ids": [
+        "E-2f607bb7-78a4-52b9-9a07-f24e5c13f78c",
+        "E-646cd029-65b9-5f5b-b674-a1a2c697f377",
+        "E-49a2ee23-6a8f-59e6-8d6f-a0f8b39a3f34",
+        "E-fa8107c7-ac6d-599a-b6d6-377bef60da3b",
+        "E-65794532-b1c0-5807-a307-7bf97d480e7d"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_ExpectedOutput_Report.docx",
+      "evidence_ids": [
+        "E-fd2db130-f816-5dc1-970c-6a6cbaea6846",
+        "E-ad1cbe8b-5eb8-561f-a640-6184da47f2f4",
+        "E-f6ec0b9b-886a-54f6-abe3-589eacc6ba6b",
+        "E-6f2ef225-ade2-58bb-a772-aefb36520f23",
+        "E-1fb4e258-ba29-5aa0-a237-d8ac04e0a6e4",
+        "E-422fae29-3960-5de3-8423-a82064f950bf",
+        "E-e4de2f97-38f0-51aa-9bde-2a321028558d",
+        "E-171d8c76-e5b2-5a14-b3aa-de4e393e3dc1",
+        "E-a84f5478-3950-5397-8e0b-cbf185d86b7d",
+        "E-87d9baca-9355-5521-b4ac-66ad10a04dd4"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_LabTestReport.docx",
+      "evidence_ids": [
+        "E-ad4cab35-3279-5662-9026-df4c9976dafb",
+        "E-25a6b35d-f12a-5aed-9c4b-9c365c0582b0",
+        "E-9886d1fc-9793-532a-9531-1dae72acebcb",
+        "E-25616e98-22c9-5ca9-a42f-99088c8a37fa",
+        "E-4f254af9-708a-57aa-b8de-94a3ef371e7e",
+        "E-7c7aa7a1-d6c3-5962-b0a7-f445e3f65976",
+        "E-d7bf4c23-e5f2-57a2-b449-ae3bbe34f37f",
+        "E-e62822f0-ae6f-54e7-ae59-25e8659f96ab"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_ObservedDefectNotes.txt",
+      "evidence_ids": [
+        "E-2ff40bda-cc79-50f7-a673-74e2eabbbbd8",
+        "E-040840ad-05eb-5833-a0de-2332928a154e"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_PFMEA_FULL.xlsx",
+      "evidence_ids": [
+        "E-cfe9a11d-3a6f-5dc5-b4ca-babe4d90c101",
+        "E-8e620038-7fea-5e44-b023-b5504d18ac4d",
+        "E-e3048727-b438-56a9-9819-aafa1228b47e",
+        "E-51340509-42f7-50a3-8e48-bc72b837f62b",
+        "E-db6c0049-8802-5283-b748-0df73282d07f",
+        "E-9c02eaa0-724d-5af0-8388-77f3dd807f91",
+        "E-6608ca1f-30db-53e5-bdc5-363284a9f7ea",
+        "E-bb29d965-db10-5449-bbf0-9330ddde8f8f",
+        "E-e6f61403-7268-504f-bdcf-2cdbb7676c12",
+        "E-1e3df4a2-61e7-56c7-8e66-e54d4278733e",
+        "E-dab8589c-aa03-5ed1-a6e8-302081e5250d"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_ProblemDescription.txt",
+      "evidence_ids": [
+        "E-e4999ebf-9680-5a27-b097-f3eb169d673c",
+        "E-75ac5b19-b0b9-54cd-9500-199d020191fa",
+        "E-0b870953-221e-570a-afdb-deef05c52997"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "Test01_SPC_OD.xlsx",
+      "evidence_ids": [
+        "E-52b71d8d-8165-5417-ae0e-256560d84441",
+        "E-b2c61f42-00ad-5b5d-adaf-953a1109ebf8",
+        "E-871858a3-f130-567b-910c-8665a92b8e11",
+        "E-7a8c8f44-f590-5a34-a8bc-97e7aab52167",
+        "E-ada0c739-03e2-5e5f-8bcd-d33a82a30c5c",
+        "E-578cb9dd-b1d1-5a4c-b942-a064dc437a7c",
+        "E-49da0b64-831e-5dbc-8100-c70a801841dd",
+        "E-ca3de680-74bb-51c8-93e3-5b583a0398e0",
+        "E-d13e2ac3-fb59-51fd-9f40-aa7e0a9f30fe",
+        "E-7e73c402-5c53-5678-9fe1-529c0f0c156e",
+        "E-5e413f32-d1fa-505d-af44-98780fde3ff0",
+        "E-c8ce5e78-be9e-58d1-88eb-3897928c961c",
+        "E-92127bf6-4945-58ac-b938-4080b71eb973",
+        "E-764095db-6e3b-550b-ab89-9e7c269678ee",
+        "E-efebf1dd-c71c-5fbd-be54-0caeddafdaee",
+        "E-40dcf91d-5a03-56e5-ba19-c4c6bda3c4f1",
+        "E-d62b140e-736a-502d-9a7c-7214eaaad267",
+        "E-a98814ee-f899-51c5-98b3-4a1c32cd9154",
+        "E-0204991a-a1a4-5a76-8306-8784d1bddab7",
+        "E-e6d91b8c-aaeb-5838-9f2e-0964389eaa45",
+        "E-1cf5301d-c878-5885-a7a8-8a3de7d0aa26",
+        "E-477267d2-5666-5da5-b23a-5d40cd7da1a2",
+        "E-86b46c44-6f33-5fe3-bf0a-c049d5bd3eb8",
+        "E-c899e8b0-60d9-5111-b642-11d57f8ed981",
+        "E-24b37809-2ba7-5d72-a929-e01f87cb5708",
+        "E-b69f0018-9dea-5bab-8fd4-2b28dd312441",
+        "E-7304fdc8-6db4-5d30-83d6-6dd02fa6b887",
+        "E-e09ad9bb-93ed-582d-8945-a62bf6f0d794",
+        "E-835253e7-a08e-5b47-8af5-d6cf07543e0d",
+        "E-618e4ed2-f542-5ae9-9c73-564e74a8702c",
+        "E-fa4483cd-e2e3-5f5e-b21b-3d486b80772d",
+        "E-546ca2cd-0ce6-5529-86e6-3c725344c51e",
+        "E-d88c7871-1796-5b03-bd2f-73bed8a81ff9",
+        "E-0988926b-6d8c-5930-b23b-60b866d2d70b",
+        "E-68445baa-7fd1-56f8-a858-eba679345ebc",
+        "E-4d1bfbf7-d668-57ef-8e16-531cfb7aca4a",
+        "E-90854cc1-0f60-5017-baa2-3fef22ab125f",
+        "E-384b9262-9fef-56c2-b280-bce1ef0efbd8",
+        "E-3645b6d2-3080-5cd2-b344-afc0ad961c5a",
+        "E-1322a27b-320e-540d-9a9f-5055ef616c42",
+        "E-af172980-5670-54c5-9c99-d50e5b731ec0",
+        "E-eb9bf84f-1b8f-5e22-8717-9acaffacee0d",
+        "E-f122f42d-0ace-5833-a82e-c9393c5f9209",
+        "E-67c47289-da82-54bd-8aa2-454f4370f535",
+        "E-2aa0d5f1-43a7-5e9d-a98e-53f5c135badf",
+        "E-f5184052-5fb5-5c5a-8b84-0683d3d2213b",
+        "E-1ccdc8a4-34ac-5ed0-a043-18cf6bf06019",
+        "E-d90fd3a4-184b-5e51-907a-321406e2e3f6",
+        "E-3dc0af2d-e241-5e5e-8360-429dacfdf719",
+        "E-430726a1-e454-5c18-a66e-739d4e308b43"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "Test01_AcceptanceCriteria.xlsx",
+    "Test01_ControlPlan_FULL.xlsx",
+    "Test01_ExpectedOutput_Report.docx",
+    "Test01_LabTestReport.docx",
+    "Test01_ObservedDefectNotes.txt",
+    "Test01_PFMEA_FULL.xlsx",
+    "Test01_ProblemDescription.txt",
+    "Test01_SPC_OD.xlsx"
+  ]
+}

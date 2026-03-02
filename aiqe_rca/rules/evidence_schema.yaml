@@ -1,0 +1,111 @@
+# AIQE Phase 2 — Evidence Category Schema for Gap Detection
+# Defines the 5 evidence categories and what document types / indicators
+# are expected within each category.
+
+categories:
+  DR:
+    name: "Design / Requirements"
+    description: "Evidence of design intent, requirements, risk analysis"
+    expected_indicators:
+      - DFMEA
+      - design review
+      - specification
+      - drawing
+      - requirements
+      - tolerance
+      - critical characteristic
+      - design intent
+      - engineering change
+    expected_document_types:
+      - "DFMEA"
+      - "Engineering drawings"
+      - "Product specifications"
+      - "Design review records"
+
+  PC:
+    name: "Process / Control"
+    description: "Evidence of process definition, controls, and work instructions"
+    expected_indicators:
+      - control plan
+      - work instruction
+      - procedure
+      - PFMEA
+      - process flow
+      - standard operating
+      - setup
+      - parameter
+      - critical step
+      - verification
+    expected_document_types:
+      - "Control Plan"
+      - "PFMEA"
+      - "Work Instructions"
+      - "Process Flow Diagram"
+
+  PV:
+    name: "Performance / Variation"
+    description: "Evidence of process performance, variation, and trends"
+    expected_indicators:
+      - SPC
+      - control chart
+      - capability
+      - Cpk
+      - Ppk
+      - yield
+      - scrap
+      - trend
+      - variation
+      - histogram
+      - data
+      - measurement
+      - statistical
+    expected_document_types:
+      - "SPC Charts"
+      - "Capability Studies"
+      - "Yield / Scrap Reports"
+      - "Measurement Data"
+
+  DA:
+    name: "Detection / Audit"
+    description: "Evidence of inspection, testing, and audit activities"
+    expected_indicators:
+      - inspection
+      - audit
+      - test
+      - testing
+      - check
+      - verification
+      - sampling
+      - lab
+      - lab report
+      - finding
+      - non-conformance
+      - NCR
+      - escape
+      - detection
+    expected_document_types:
+      - "Inspection Records"
+      - "Audit Reports"
+      - "Lab Test Reports"
+      - "Non-Conformance Reports"
+
+  RC:
+    name: "Response / Corrective"
+    description: "Evidence of containment, corrective action, and response activities"
+    expected_indicators:
+      - corrective action
+      - containment
+      - rework
+      - sort
+      - quarantine
+      - 8D
+      - CAPA
+      - response
+      - disposition
+      - root cause
+      - countermeasure
+    expected_document_types:
+      - "8D Reports"
+      - "CAPA Records"
+      - "Containment Records"
+      - "Rework/Sort Instructions"

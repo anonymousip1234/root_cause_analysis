@@ -1,0 +1,12 @@
+Rephrase the following structured diagnostic summary into a clear, concise executive summary (max 2 paragraphs). Use plain, engineer-friendly language. Acknowledge uncertainty where evidence is incomplete or conflicting. Do not use directive or absolute language.
+
+Problem Statement: {problem_statement}
+
+Primary Hypothesis: {primary_hypothesis}
+Secondary Hypothesis: {secondary_hypothesis}
+Supporting Evidence Count: {supporting_count}
+Contradicting Evidence Count: {contradicting_count}
+Data Gaps: {gaps_summary}
+Confidence Level: {confidence}
+
+Write the summary now:

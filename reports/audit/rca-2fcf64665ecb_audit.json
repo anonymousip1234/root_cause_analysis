@@ -1,0 +1,24 @@
+{
+  "input_hash": "616657f78af5976bba1c6d21f55876f0a13d79d5fef1ce61b790d3b9005cbe5f",
+  "timestamp": "2026-02-25T09:37:46.512627+00:00",
+  "trace_map": [
+    {
+      "source_file": "Test01_PFMEA.pdf",
+      "evidence_ids": [
+        "E-38c7aa92-7b32-5627-8c63-4bf74988a407",
+        "E-21909795-3b06-5ed6-9179-7a00c9a692b4",
+        "E-5a9ae3d9-e143-5df0-8796-c3647e3c6cbc",
+        "E-84f5f7b9-7eaf-5c62-9403-d4538e04ec41",
+        "E-0fa25c22-d97c-521b-bc39-dc7c4400b197",
+        "E-51797b70-58dd-54fb-a76a-a6c65767c4f8",
+        "E-d26e94c8-b297-5813-90cf-36075611d3dc",
+        "E-df61bd31-e6ee-56a3-8716-37fa5f3e1285",
+        "E-4bc5179f-69e1-5ebb-8bc0-cddf074b8fa8"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "Test01_PFMEA.pdf"
+  ]
+}

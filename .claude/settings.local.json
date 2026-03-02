@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(poetry --version)",
+      "Bash(python3 -c \":*)",
+      "Bash(pip3 list)",
+      "Bash(poetry init --name aiqe-rca-engine --python \"^3.12\" --no-interaction)",
+      "Bash(poetry env info)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(poetry install)",
+      "Bash(python -m pytest tests/test_parsers.py -v)",
+      "Bash(python -m pytest tests/test_engine.py -v)"
+    ]
+  }
+}
