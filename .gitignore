@@ -31,8 +31,8 @@ reports/*.pdf
 reports/*.html
 reports/*.json
 
-# Models (downloaded embeddings)
-models/
+# # Models (downloaded embeddings)
+# models/
 
 # OS
 .DS_Store
