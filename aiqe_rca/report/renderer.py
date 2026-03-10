@@ -1,5 +1,6 @@
 """Report renderer — produces HTML, PDF, and JSON from ReportOutput."""
 
+import base64
 import json
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from aiqe_rca.config import settings
 from aiqe_rca.models.report import ReportOutput
+
+_LOGO_PATH = Path(__file__).parent / "templates" / "logo.jpg"
 
 
 def _get_jinja_env() -> Environment:
@@ -18,10 +21,23 @@ def _get_jinja_env() -> Environment:
     )
 
 
+def _logo_data_uri() -> str:
+    """Return the AIQE logo as a base64 data URI for embedding in HTML."""
+    if _LOGO_PATH.exists():
+        b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/jpeg;base64,{b64}"
+    return ""
+
+
 def render_html(report: ReportOutput) -> str:
     """Render the report as HTML string using the structured template."""
     env = _get_jinja_env()
     template = env.get_template("report.html")
+
+    logo = _logo_data_uri()
+    problem_stmt = ""
+    if report.analysis_result:
+        problem_stmt = report.analysis_result.problem_statement
 
     # Get structured template data if available (set by generator)
     tdata = getattr(report, "_template_data", None)
@@ -29,6 +45,8 @@ def render_html(report: ReportOutput) -> str:
     if tdata:
         return template.render(
             header=report.header,
+            logo_data_uri=logo,
+            problem_statement=problem_stmt,
             executive_summary_paragraphs=tdata["executive_summary_paragraphs"],
             hypotheses=tdata["hypotheses"],
             why_bullets=tdata["why_bullets"],
@@ -43,6 +61,8 @@ def render_html(report: ReportOutput) -> str:
         exec_paragraphs = report.sections[0].content.split("\n\n") if report.sections else []
         return template.render(
             header=report.header,
+            logo_data_uri=logo,
+            problem_statement=problem_stmt,
             executive_summary_paragraphs=exec_paragraphs,
             hypotheses=[],
             why_bullets=[],

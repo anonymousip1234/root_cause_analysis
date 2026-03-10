@@ -82,8 +82,8 @@ class TestCase01:
         titles = [s.title for s in report.sections]
         assert "Executive Diagnostic Summary" in titles
         assert "Most Likely Root Cause Hypotheses" in titles
-        assert "Why AIQE Believes This" in titles
-        assert "Immediate Actions to Test" in titles
+        assert "Diagnostic Evidence" in titles
+        assert "Recommended Testing / Validation" in titles
         assert "Analysis Confidence Statement" in titles
 
     def test_report_no_disallowed_language(self, test01_files):

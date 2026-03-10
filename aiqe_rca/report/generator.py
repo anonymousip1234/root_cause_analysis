@@ -391,11 +391,11 @@ def generate_report(
             content="\n".join(hyp_text_lines) if hyp_text_lines else FALLBACKS["contributing_hypotheses"],
         ),
         ReportSection(
-            title="Why AIQE Believes This",
+            title="Diagnostic Evidence",
             content="\n".join(f"- {b}" for b in why_bullets),
         ),
         ReportSection(
-            title="Immediate Actions to Test",
+            title="Recommended Testing / Validation",
             content="\n".join(f"{i+1}. {a}" for i, a in enumerate(action_items)),
         ),
         ReportSection(
