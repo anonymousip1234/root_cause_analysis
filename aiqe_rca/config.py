@@ -34,7 +34,19 @@ class Settings(BaseSettings):
     # Report storage
     reports_dir: Path = Path(__file__).resolve().parent.parent / "reports"
 
-    model_config = {"env_prefix": "AIQE_", "env_file": ".env"}
+    model_config = {"env_prefix": "AIQE_", "env_file": ".env", "extra": "ignore"}
+
+
+class AWSSettings(BaseSettings):
+    """AWS credentials — read from env vars without prefix."""
+
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "us-east-1"
+    aws_s3_bucket: str = ""
+
+    model_config = {"env_file": ".env"}
 
 
 settings = Settings()
+aws_settings = AWSSettings()

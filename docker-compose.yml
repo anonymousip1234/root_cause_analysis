@@ -1,0 +1,19 @@
+services:
+  aiqe-rca:
+    build: .
+    ports:
+      - "80:8000"
+    environment:
+      - AIQE_EMBEDDING_DEVICE=cpu
+      - AIQE_LLM_ENABLED=false
+    volumes:
+      - reports:/app/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  reports:
