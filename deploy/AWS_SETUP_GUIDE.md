@@ -110,12 +110,25 @@ Go to: **GitHub Repo → Settings → Secrets and variables → Actions → New 
 ## After Setup: First Deploy
 
 ```bash
-# Build and push image manually the first time
-./deploy/deploy.sh us-east-1
+# macOS / Linux / Git Bash
+./deploy/deploy.sh us-east-1 <vpc-id> <subnet-id-1>,<subnet-id-2>
+
+# Windows PowerShell
+.\deploy\deploy.ps1 -Region us-east-1 -VpcId <vpc-id> -SubnetIds <subnet-id-1>,<subnet-id-2>
 
 # After that, every push to master auto-deploys via GitHub Actions
 git push origin master
 ```
+
+### Important Notes
+
+- `deploy/deploy.sh` is a Bash script. It will not run in plain Windows PowerShell unless you use Git Bash, WSL, or similar.
+- The deploy script only performs the full ECS deploy when you pass both `VpcId` and `SubnetIds`. If you run it with only `us-east-1`, it will stop after pushing the Docker image.
+- Prerequisites for either script:
+  - AWS CLI installed and configured (`aws configure`)
+  - Docker Desktop installed and running
+  - Two public subnets in the target VPC
+- The CloudFormation stack injects `AWS_REGION` and `AWS_S3_BUCKET` into the container. S3 access is provided through the ECS task IAM role, so you do not need to hardcode AWS keys in the container when using the provided stack.
 
 ---
 

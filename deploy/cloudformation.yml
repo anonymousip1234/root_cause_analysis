@@ -166,6 +166,11 @@ Resources:
         - Name: !Ref AppName
           Image: !Ref ImageUri
           Essential: true
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_S3_BUCKET
+              Value: !Ref ReportBucket
           PortMappings:
             - ContainerPort: 8000
               Protocol: tcp

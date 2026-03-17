@@ -30,15 +30,17 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB per file
 
 
 def _get_s3_client():
-    """Create an S3 client from configured credentials."""
-    if not aws_settings.aws_access_key_id or not aws_settings.aws_s3_bucket:
+    """Create an S3 client from env credentials or the task's IAM role."""
+    if not aws_settings.aws_s3_bucket:
         return None
-    return boto3.client(
-        "s3",
-        aws_access_key_id=aws_settings.aws_access_key_id,
-        aws_secret_access_key=aws_settings.aws_secret_access_key,
-        region_name=aws_settings.aws_region,
-    )
+    if aws_settings.aws_access_key_id and aws_settings.aws_secret_access_key:
+        return boto3.client(
+            "s3",
+            aws_access_key_id=aws_settings.aws_access_key_id,
+            aws_secret_access_key=aws_settings.aws_secret_access_key,
+            region_name=aws_settings.aws_region,
+        )
+    return boto3.client("s3", region_name=aws_settings.aws_region)
 
 
 def _upload_to_s3(content: bytes, key: str, content_type: str) -> str | None:
