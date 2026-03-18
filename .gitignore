@@ -24,7 +24,7 @@ env/
 .env.*
 
 # Poetry
-poetry.lock
+# poetry.lock is tracked — needed for reproducible Docker builds
 
 # Reports (generated output)
 reports/*.pdf
