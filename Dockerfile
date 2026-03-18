@@ -19,10 +19,12 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --without dev --no-root
+    && poetry install --no-interaction --no-ansi --without dev --no-root \
+    && rm -rf /root/.cache/pypoetry /root/.cache/pip
 
 # Pre-download the embedding model at build time so it's baked into the image
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" \
+    && rm -rf /root/.cache/pip
 
 # Copy application code
 COPY aiqe_rca/ aiqe_rca/
