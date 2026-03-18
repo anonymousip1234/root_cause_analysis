@@ -17,6 +17,9 @@ WORKDIR /app
 
 # Install Python deps first (layer caching)
 COPY pyproject.toml poetry.lock ./
+# Install CPU-only PyTorch first (200MB vs 1.7GB for full torch)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --without dev --no-root \
