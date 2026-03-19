@@ -1,10 +1,7 @@
 name: Test, Build & Deploy
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -38,10 +35,9 @@ jobs:
       - name: Run tests
         run: poetry run pytest tests/ -v
 
-  # ── JOB 2: Build and deploy (only on push to master) ──
+  # ── JOB 2: Build image, push to ECR, redeploy ECS ──
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,8 +71,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Print image URI
+      - name: Force ECS to pull new image
         run: |
-          echo "✅ Image pushed to ECR:"
-          echo "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
-          echo "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+          echo "✅ ECS service redeploying with latest image"
