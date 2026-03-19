@@ -1,20 +1,34 @@
 """API routes for the AIQE RCA Engine."""
 
 import json
+import logging
+import smtplib
 import uuid
 from datetime import datetime, timezone
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from aiqe_rca.api.schemas import AnalyzeResponse, ErrorResponse, HealthResponse
+from aiqe_rca.api.schemas import (
+    AnalyzeResponse,
+    EmailReportRequest,
+    ErrorResponse,
+    FeedbackRequest,
+    FeedbackResponse,
+    HealthResponse,
+)
 from aiqe_rca.audit.hasher import compute_input_hash
 from aiqe_rca.audit.trace_map import build_audit_record
-from aiqe_rca.config import settings
+from aiqe_rca.config import aws_settings, settings
 from aiqe_rca.engine.pipeline import run_analysis
 from aiqe_rca.parser.router import SUPPORTED_EXTENSIONS
 from aiqe_rca.report.generator import generate_report
 from aiqe_rca.report.renderer import render_json, save_report
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -136,3 +150,118 @@ async def get_report(report_id: str, format: str = "json"):
         return HTMLResponse(content=path.read_text(encoding="utf-8"))
     else:
         return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _send_smtp_email(to_addresses: list[str], subject: str, body: str, attachments: list[tuple[str, bytes]] | None = None):
+    """Send an email via SMTP. Raises smtplib.SMTPException on failure."""
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = aws_settings.smtp_sender_email
+    msg["To"] = ", ".join(to_addresses)
+    msg.attach(MIMEText(body, "plain"))
+
+    for filename, file_bytes in (attachments or []):
+        attachment = MIMEApplication(file_bytes)
+        attachment.add_header("Content-Disposition", "attachment", filename=filename)
+        msg.attach(attachment)
+
+    with smtplib.SMTP(aws_settings.smtp_host, aws_settings.smtp_port) as server:
+        server.starttls()
+        server.login(aws_settings.smtp_sender_email, aws_settings.smtp_sender_password)
+        server.sendmail(aws_settings.smtp_sender_email, to_addresses, msg.as_string())
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(feedback: FeedbackRequest):
+    """Submit feedback for a report and notify admin via email."""
+    # Verify the report exists
+    report_path = settings.reports_dir / f"{feedback.report_id}.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail=f"Report '{feedback.report_id}' not found.")
+
+    # Save feedback to disk
+    feedback_id = f"fb-{uuid.uuid4().hex[:12]}"
+    feedback_record = {
+        "feedback_id": feedback_id,
+        "report_id": feedback.report_id,
+        "rating": feedback.rating,
+        "comment": feedback.comment,
+        "submitted_by": feedback.submitted_by,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    feedback_dir = settings.reports_dir / "feedback"
+    feedback_dir.mkdir(parents=True, exist_ok=True)
+    feedback_path = feedback_dir / f"{feedback_id}.json"
+    feedback_path.write_text(json.dumps(feedback_record, indent=2), encoding="utf-8")
+
+    # Email admins if SMTP is configured
+    admin_notified = False
+    admin_emails = [
+        e.strip() for e in aws_settings.smtp_admin_emails.split(",") if e.strip()
+    ]
+    if aws_settings.smtp_sender_email and aws_settings.smtp_sender_password and admin_emails:
+        try:
+            _send_smtp_email(
+                to_addresses=admin_emails,
+                subject=f"AIQE Feedback: {feedback.report_id} — Rating {feedback.rating}/5",
+                body=(
+                    f"Report ID: {feedback.report_id}\n"
+                    f"Rating: {feedback.rating}/5\n"
+                    f"Submitted by: {feedback.submitted_by or 'Anonymous'}\n\n"
+                    f"Comment:\n{feedback.comment or '(no comment)'}\n\n"
+                    f"Timestamp: {feedback_record['timestamp']}"
+                ),
+            )
+            admin_notified = True
+        except smtplib.SMTPException:
+            logger.exception("SMTP send failed for feedback %s", feedback_id)
+
+    return FeedbackResponse(
+        feedback_id=feedback_id,
+        report_id=feedback.report_id,
+        admin_notified=admin_notified,
+    )
+
+
+@router.post("/report/{report_id}/email")
+async def email_report(report_id: str, req: EmailReportRequest):
+    """Send a generated report to recipients via email (SMTP).
+
+    Attaches the report as PDF or HTML.
+    """
+    if not aws_settings.smtp_sender_email or not aws_settings.smtp_sender_password:
+        raise HTTPException(
+            status_code=503,
+            detail="Email not configured. Set SMTP_SENDER_EMAIL and SMTP_SENDER_PASSWORD in environment.",
+        )
+
+    # Resolve the report file
+    ext = "pdf" if req.format == "pdf" else "html"
+    report_path = settings.reports_dir / f"{report_id}.{ext}"
+    if not report_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report '{report_id}' not found in {ext} format.",
+        )
+
+    subject = req.subject or f"AIQE Root Cause Analysis Report — {report_id}"
+    body_text = req.message or "Please find the attached AIQE RCA report."
+
+    try:
+        _send_smtp_email(
+            to_addresses=req.recipient_emails,
+            subject=subject,
+            body=body_text,
+            attachments=[(f"{report_id}.{ext}", report_path.read_bytes())],
+        )
+    except smtplib.SMTPException as e:
+        logger.exception("SMTP send failed for report %s", report_id)
+        raise HTTPException(status_code=502, detail=f"Email delivery failed: {e}")
+
+    return {
+        "status": "sent",
+        "report_id": report_id,
+        "recipients": req.recipient_emails,
+        "format": ext,
+    }

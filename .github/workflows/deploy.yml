@@ -75,29 +75,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Set image output
-        run: echo "image=${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
-        id: image-output
-
-      - name: Download current ECS task definition
+      - name: Print image URI
         run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ env.CONTAINER_NAME }} \
-            --query taskDefinition \
-            > task-definition.json
-
-      - name: Update ECS task definition with new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.image-output.outputs.image }}
-
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          echo "✅ Image pushed to ECR:"
+          echo "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
