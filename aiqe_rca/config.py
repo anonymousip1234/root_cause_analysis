@@ -45,12 +45,10 @@ class AWSSettings(BaseSettings):
     aws_region: str = "us-east-1"
     aws_s3_bucket: str = ""
 
-    # SMTP email settings (works with Gmail, Outlook, Yahoo, etc.)
-    smtp_host: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_sender_email: str = ""
-    smtp_sender_password: str = ""
-    smtp_admin_emails: str = ""
+    # SendGrid email settings
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = ""
+    sendgrid_to_email: str = ""
 
     model_config = {"env_file": ".env"}
 

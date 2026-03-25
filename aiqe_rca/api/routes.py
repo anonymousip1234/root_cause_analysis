@@ -1,13 +1,10 @@
 """API routes for the AIQE RCA Engine."""
 
+import base64
 import json
 import logging
-import smtplib
 import uuid
 from datetime import datetime, timezone
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -152,23 +149,39 @@ async def get_report(report_id: str, format: str = "json"):
         return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _send_smtp_email(to_addresses: list[str], subject: str, body: str, attachments: list[tuple[str, bytes]] | None = None):
-    """Send an email via SMTP. Raises smtplib.SMTPException on failure."""
-    msg = MIMEMultipart("mixed")
-    msg["Subject"] = subject
-    msg["From"] = aws_settings.smtp_sender_email
-    msg["To"] = ", ".join(to_addresses)
-    msg.attach(MIMEText(body, "plain"))
+def _send_email(to_addresses: list[str], subject: str, body: str, attachments: list[tuple[str, bytes]] | None = None):
+    """Send an email via SendGrid API. Raises on failure."""
+    import httpx
 
-    for filename, file_bytes in (attachments or []):
-        attachment = MIMEApplication(file_bytes)
-        attachment.add_header("Content-Disposition", "attachment", filename=filename)
-        msg.attach(attachment)
+    msg = {
+        "personalizations": [{"to": [{"email": addr} for addr in to_addresses]}],
+        "from": {"email": aws_settings.sendgrid_from_email},
+        "subject": subject,
+        "content": [{"type": "text/plain", "value": body}],
+    }
 
-    with smtplib.SMTP(aws_settings.smtp_host, aws_settings.smtp_port) as server:
-        server.starttls()
-        server.login(aws_settings.smtp_sender_email, aws_settings.smtp_sender_password)
-        server.sendmail(aws_settings.smtp_sender_email, to_addresses, msg.as_string())
+    if attachments:
+        msg["attachments"] = [
+            {
+                "content": base64.b64encode(file_bytes).decode("ascii"),
+                "filename": filename,
+                "type": "application/pdf" if filename.endswith(".pdf") else "text/html",
+                "disposition": "attachment",
+            }
+            for filename, file_bytes in attachments
+        ]
+
+    resp = httpx.post(
+        "https://api.sendgrid.com/v3/mail/send",
+        headers={
+            "Authorization": f"Bearer {aws_settings.sendgrid_api_key}",
+            "Content-Type": "application/json",
+        },
+        json=msg,
+        timeout=30,
+    )
+    if resp.status_code not in (200, 202):
+        raise RuntimeError(f"SendGrid error {resp.status_code}: {resp.text}")
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
@@ -195,14 +208,14 @@ async def submit_feedback(feedback: FeedbackRequest):
     feedback_path = feedback_dir / f"{feedback_id}.json"
     feedback_path.write_text(json.dumps(feedback_record, indent=2), encoding="utf-8")
 
-    # Email admins if SMTP is configured
+    # Email admins if SendGrid is configured
     admin_notified = False
     admin_emails = [
-        e.strip() for e in aws_settings.smtp_admin_emails.split(",") if e.strip()
+        e.strip() for e in aws_settings.sendgrid_to_email.split(",") if e.strip()
     ]
-    if aws_settings.smtp_sender_email and aws_settings.smtp_sender_password and admin_emails:
+    if aws_settings.sendgrid_api_key and aws_settings.sendgrid_from_email and admin_emails:
         try:
-            _send_smtp_email(
+            _send_email(
                 to_addresses=admin_emails,
                 subject=f"AIQE Feedback: {feedback.report_id} — Rating {feedback.rating}/5",
                 body=(
@@ -214,8 +227,8 @@ async def submit_feedback(feedback: FeedbackRequest):
                 ),
             )
             admin_notified = True
-        except smtplib.SMTPException:
-            logger.exception("SMTP send failed for feedback %s", feedback_id)
+        except Exception:
+            logger.exception("SendGrid send failed for feedback %s", feedback_id)
 
     return FeedbackResponse(
         feedback_id=feedback_id,
@@ -230,10 +243,10 @@ async def email_report(report_id: str, req: EmailReportRequest):
 
     Attaches the report as PDF or HTML.
     """
-    if not aws_settings.smtp_sender_email or not aws_settings.smtp_sender_password:
+    if not aws_settings.sendgrid_api_key or not aws_settings.sendgrid_from_email:
         raise HTTPException(
             status_code=503,
-            detail="Email not configured. Set SMTP_SENDER_EMAIL and SMTP_SENDER_PASSWORD in environment.",
+            detail="Email not configured. Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL in environment.",
         )
 
     # Resolve the report file
@@ -249,14 +262,14 @@ async def email_report(report_id: str, req: EmailReportRequest):
     body_text = req.message or "Please find the attached AIQE RCA report."
 
     try:
-        _send_smtp_email(
+        _send_email(
             to_addresses=req.recipient_emails,
             subject=subject,
             body=body_text,
             attachments=[(f"{report_id}.{ext}", report_path.read_bytes())],
         )
-    except smtplib.SMTPException as e:
-        logger.exception("SMTP send failed for report %s", report_id)
+    except Exception as e:
+        logger.exception("SendGrid send failed for report %s", report_id)
         raise HTTPException(status_code=502, detail=f"Email delivery failed: {e}")
 
     return {
