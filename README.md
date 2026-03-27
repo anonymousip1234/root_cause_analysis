@@ -233,6 +233,13 @@ Configuration is managed via environment variables (prefix `AIQE_`) or a `.env` 
 | `AIQE_LLM_API_KEY` | `""` | OpenAI API key (only if LLM enabled) |
 | `AIQE_LLM_MODEL` | `gpt-4o-mini` | LLM model for synthesis |
 | `AIQE_LLM_TEMPERATURE` | `0.0` | LLM temperature (must be 0 for determinism) |
+| `AIQE_CORS_ALLOWED_ORIGINS` | `["http://localhost:3000","http://127.0.0.1:3000","https://aiqe.ai"]` | JSON array of frontend origins allowed by CORS |
+
+For example, in `.env`:
+
+```env
+AIQE_CORS_ALLOWED_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000","https://aiqe.ai"]
+```
 
 ## Behavior Rules
 

@@ -34,17 +34,13 @@ class ErrorResponse(BaseModel):
 class FeedbackRequest(BaseModel):
     """Request body for submitting feedback."""
 
-    report_id: str = Field(..., description="Report ID the feedback is about")
-    rating: int = Field(..., ge=1, le=5, description="Rating from 1 (poor) to 5 (excellent)")
-    comment: str = Field(default="", max_length=2000, description="Optional feedback comment")
-    submitted_by: str = Field(default="", description="Name or email of person submitting feedback")
+    comment: str = Field(..., max_length=2000, description="Feedback comment")
 
 
 class FeedbackResponse(BaseModel):
     """Response after feedback submission."""
 
     feedback_id: str
-    report_id: str
     admin_notified: bool
 
 

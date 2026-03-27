@@ -186,20 +186,11 @@ def _send_email(to_addresses: list[str], subject: str, body: str, attachments: l
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(feedback: FeedbackRequest):
-    """Submit feedback for a report and notify admin via email."""
-    # Verify the report exists
-    report_path = settings.reports_dir / f"{feedback.report_id}.json"
-    if not report_path.exists():
-        raise HTTPException(status_code=404, detail=f"Report '{feedback.report_id}' not found.")
-
-    # Save feedback to disk
+    """Submit general feedback and notify admin via email."""
     feedback_id = f"fb-{uuid.uuid4().hex[:12]}"
     feedback_record = {
         "feedback_id": feedback_id,
-        "report_id": feedback.report_id,
-        "rating": feedback.rating,
         "comment": feedback.comment,
-        "submitted_by": feedback.submitted_by,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -217,12 +208,9 @@ async def submit_feedback(feedback: FeedbackRequest):
         try:
             _send_email(
                 to_addresses=admin_emails,
-                subject=f"AIQE Feedback: {feedback.report_id} — Rating {feedback.rating}/5",
+                subject=f"AIQE Feedback: {feedback_id}",
                 body=(
-                    f"Report ID: {feedback.report_id}\n"
-                    f"Rating: {feedback.rating}/5\n"
-                    f"Submitted by: {feedback.submitted_by or 'Anonymous'}\n\n"
-                    f"Comment:\n{feedback.comment or '(no comment)'}\n\n"
+                    f"Comment:\n{feedback.comment}\n\n"
                     f"Timestamp: {feedback_record['timestamp']}"
                 ),
             )
@@ -232,7 +220,6 @@ async def submit_feedback(feedback: FeedbackRequest):
 
     return FeedbackResponse(
         feedback_id=feedback_id,
-        report_id=feedback.report_id,
         admin_notified=admin_notified,
     )
 

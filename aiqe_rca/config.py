@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -33,6 +34,15 @@ class Settings(BaseSettings):
 
     # Report storage
     reports_dir: Path = Path(__file__).resolve().parent.parent / "reports"
+
+    # API
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://aiqe.ai",
+        ]
+    )
 
     model_config = {"env_prefix": "AIQE_", "env_file": ".env", "extra": "ignore"}
 
