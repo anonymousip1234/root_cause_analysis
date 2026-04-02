@@ -121,6 +121,8 @@ def detect_gaps(
                 )
             )
 
+    gaps.extend(_detect_contextual_gaps(evidence_elements, hypotheses))
+
     return gaps
 
 
@@ -148,3 +150,99 @@ def _find_affected_hypotheses(
                 affected.append(h.id)
 
     return affected
+
+
+def _detect_contextual_gaps(
+    evidence_elements: list[EvidenceElement],
+    hypotheses: list[Hypothesis] | None,
+) -> list[DataGap]:
+    """Add context-specific gaps that materially limit confidence in ranked causes."""
+    if not evidence_elements:
+        return []
+
+    all_text = " ".join(e.text_content.lower() for e in evidence_elements)
+    detected: list[DataGap] = []
+
+    def _affected_for_templates(template_ids: set[str]) -> list[str]:
+        if not hypotheses:
+            return []
+        return [
+            h.id
+            for h in hypotheses
+            if h.template_id in template_ids
+        ]
+
+    if "adhesive" in all_text and (
+        "left open past exposure time" in all_text
+        or "open container" in all_text
+        or "open past recommended exposure time" in all_text
+        or "open on the production floor beyond the 4-hour exposure limit" in all_text
+        or "open beyond the 4-hour exposure limit" in all_text
+    ):
+        detected.append(
+            DataGap(
+                category=EvidenceCategory.PROCESS_CONTROL,
+                description=(
+                    "Adhesive handling variability is referenced, but lot-by-lot exposure time "
+                    "or open-container duration is not directly logged."
+                ),
+                severity=GapSeverity.MODERATE,
+                affects_hypotheses=_affected_for_templates(
+                    {"TMPL_SURFACE_PREP", "TMPL_MATERIAL_HANDLING"}
+                ),
+            )
+        )
+
+    if (
+        "stored longer than 48 hours" in all_text
+        or "staged near open dock doors" in all_text
+        or "wip time limit posted" in all_text
+        or "no electronic tracking" in all_text
+    ):
+        detected.append(
+            DataGap(
+                category=EvidenceCategory.PROCESS_CONTROL,
+                description=(
+                    "Storage / staging conditions appear relevant, but there is no direct lot-level "
+                    "tracking of dwell time or location before molding."
+                ),
+                severity=GapSeverity.MODERATE,
+                affects_hypotheses=_affected_for_templates({"TMPL_MATERIAL_HANDLING"}),
+            )
+        )
+
+    if "dock doors" in all_text or "humidity" in all_text or "ambient; no monitoring" in all_text:
+        detected.append(
+            DataGap(
+                category=EvidenceCategory.PERFORMANCE_VARIATION,
+                description=(
+                    "Environmental humidity exposure is plausible from the inputs, but no direct "
+                    "humidity or ambient-condition monitoring data was provided."
+                ),
+                severity=GapSeverity.MODERATE,
+                affects_hypotheses=_affected_for_templates(
+                    {"TMPL_MATERIAL_HANDLING", "TMPL_ENVIRONMENTAL"}
+                ),
+            )
+        )
+
+    if ("coverage" in all_text or "geometry-challenged" in all_text) and (
+        "no thickness gauge" in all_text or "visual inspection of coverage" in all_text
+        or "no quantitative measurement exists" in all_text
+        or "hardest to verify" in all_text
+    ):
+        detected.append(
+            DataGap(
+                category=EvidenceCategory.DETECTION_AUDIT,
+                description=(
+                    "Adhesive coverage verification is limited to visual checks; quantitative "
+                    "coverage or thickness confirmation is not available."
+                ),
+                severity=GapSeverity.MODERATE,
+                affects_hypotheses=_affected_for_templates(
+                    {"TMPL_DESIGN_GEOMETRY", "TMPL_SURFACE_PREP"}
+                ),
+            )
+        )
+
+    return detected

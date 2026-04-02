@@ -1,7 +1,10 @@
 """Tests for the core deterministic engine."""
 
+import pytest
+
 from aiqe_rca.engine.alignment_classifier import classify_alignment
 from aiqe_rca.engine.confidence import assess_confidence
+from aiqe_rca.engine.evidence_associator import associate_evidence
 from aiqe_rca.engine.gap_detector import detect_gaps
 from aiqe_rca.engine.hypothesis_builder import build_hypotheses
 from aiqe_rca.engine.ranker import rank_hypotheses
@@ -78,6 +81,18 @@ def test_classify_contradicting():
     assert result.classification == AlignmentLabel.CONTRADICTING
 
 
+def test_classify_weakening():
+    h = Hypothesis(
+        id="H1",
+        description="Process parameter variation",
+        template_id="TMPL_PROCESS_PARAM",
+        keywords=["cure", "temperature", "cure time", "cure temperature", "stable process parameters"],
+    )
+    e = _make_evidence("E2", "SPC data for cure temperature and cure time remain in control with no process shifts detected")
+    result = classify_alignment(h, e)
+    assert result.classification == AlignmentLabel.WEAKENING
+
+
 def test_classify_indeterminate_no_keywords():
     h = Hypothesis(
         id="H1",
@@ -142,6 +157,28 @@ def test_confidence_with_gaps_reduces():
     result = assess_confidence([h1], alignments, gaps)
     # With 3 critical gaps, confidence should be reduced
     assert result in (ConfidenceLevel.LOW, ConfidenceLevel.MEDIUM)
+
+
+def test_associate_evidence_falls_back_without_embeddings(monkeypatch):
+    hypothesis = Hypothesis(
+        id="H1",
+        description="Surface contamination before bonding",
+        template_id="TMPL_SURFACE_PREP",
+        process_step="Upstream Surface / Adhesive Condition Variation",
+        keywords=["surface", "contamination", "manual wipe", "adhesive"],
+    )
+    evidence = _make_evidence(
+        "E1",
+        "Operators were observed skipping the manual wipe step before adhesive bonding.",
+    )
+
+    monkeypatch.setattr(
+        "aiqe_rca.engine.evidence_associator.EmbeddingModel.encode",
+        lambda texts: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+
+    updated = associate_evidence([hypothesis], [evidence])
+    assert updated[0].associated_evidence_ids == ["E1"]
 
 
 # --- Gap Detector Tests ---

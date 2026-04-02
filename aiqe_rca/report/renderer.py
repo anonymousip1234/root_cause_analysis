@@ -85,6 +85,30 @@ def render_pdf(report: ReportOutput, output_path: Path) -> Path:
 
 def render_json(report: ReportOutput) -> str:
     """Render the report as machine-readable JSON."""
+    tdata = getattr(report, "_template_data", {}) or {}
+    analysis = None
+    if report.analysis_result:
+        analysis = {
+            "hypotheses": tdata.get("hypotheses", []),
+            "evidence_relationships": tdata.get("relationship_entries", []),
+            "contradictions": tdata.get("contradictions", []),
+            "gaps": [
+                {
+                    "category": gap.category.value,
+                    "description": gap.description,
+                    "severity": gap.severity.value,
+                    "affects_hypotheses": gap.affects_hypotheses,
+                }
+                for gap in report.analysis_result.gaps
+            ],
+            "confidence": report.analysis_result.confidence.value,
+            "stateless_execution": {
+                "isolated_per_request": True,
+                "shared_request_context": False,
+                "deterministic_input_hash": report.input_hash,
+                "memory_reuse": "No prior report content or vocabulary is stored in engine state.",
+            },
+        }
     report_dict = {
         "header": {
             "part_process": report.header.part_process,
@@ -95,6 +119,7 @@ def render_json(report: ReportOutput) -> str:
         "sections": [
             {"title": s.title, "content": s.content} for s in report.sections
         ],
+        "analysis": analysis,
         "evidence_trace_map": report.evidence_trace_map,
         "input_hash": report.input_hash,
         "timestamp": report.timestamp,
@@ -122,7 +147,12 @@ def save_report(
     paths["html"] = html_path
 
     pdf_path = out_dir / f"{report_id}.pdf"
-    render_pdf(report, pdf_path)
-    paths["pdf"] = pdf_path
+    try:
+        render_pdf(report, pdf_path)
+        paths["pdf"] = pdf_path
+    except Exception:
+        # HTML/JSON remain valid deliverables even if native PDF dependencies
+        # are unavailable on the host environment.
+        pass
 
     return paths

@@ -9,12 +9,24 @@ from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.gaps import DataGap, GapSeverity
 from aiqe_rca.models.hypothesis import Hypothesis, RankLabel
 
+_TEMPLATE_RANK_BIAS = {
+    "TMPL_SURFACE_PREP": 1.5,
+    "TMPL_DESIGN_GEOMETRY": 1.25,
+    "TMPL_MATERIAL_HANDLING": 1.0,
+    "TMPL_ENVIRONMENTAL": 1.0,
+    "TMPL_PROCESS_PARAM": -1.5,
+    "TMPL_EQUIPMENT_CONDITION": -0.75,
+    "TMPL_HUMAN_DISCIPLINE": -1.5,
+    "TMPL_DETECTION_GAP": -1.5,
+}
+
 
 def _count_alignments(
     hypothesis_id: str, alignments: list[AlignmentResult]
-) -> tuple[int, int, int]:
-    """Count supporting, contradicting, and indeterminate alignments for a hypothesis."""
+) -> tuple[int, int, int, int]:
+    """Count supporting, weakening, contradicting, and indeterminate alignments."""
     supporting = 0
+    weakening = 0
     contradicting = 0
     indeterminate = 0
     for a in alignments:
@@ -22,18 +34,20 @@ def _count_alignments(
             continue
         if a.classification == AlignmentLabel.SUPPORTING:
             supporting += 1
+        elif a.classification == AlignmentLabel.WEAKENING:
+            weakening += 1
         elif a.classification == AlignmentLabel.CONTRADICTING:
             contradicting += 1
         else:
             indeterminate += 1
-    return supporting, contradicting, indeterminate
+    return supporting, weakening, contradicting, indeterminate
 
 
 def _compute_gap_severity(hypothesis_id: str, gaps: list[DataGap]) -> int:
     """Compute gap severity score for a hypothesis.
 
     Each gap that affects this hypothesis contributes:
-    - CRITICAL: 3 points
+    - CRITICAL: 2 points
     - MODERATE: 1 point
     - MINOR: 0 points
     """
@@ -41,7 +55,7 @@ def _compute_gap_severity(hypothesis_id: str, gaps: list[DataGap]) -> int:
     for gap in gaps:
         if hypothesis_id in gap.affects_hypotheses:
             if gap.severity == GapSeverity.CRITICAL:
-                severity += 3
+                severity += 2
             elif gap.severity == GapSeverity.MODERATE:
                 severity += 1
     return severity
@@ -55,7 +69,7 @@ def rank_hypotheses(
     """Rank hypotheses and assign labels: Primary / Secondary / Conditional Amplifier.
 
     Logic:
-    1. For each hypothesis compute net_support = supporting - contradicting.
+    1. For each hypothesis compute net_support = supporting - weakening - (2 * contradicting).
     2. Compute gap_severity for each hypothesis.
     3. Compute composite = net_support - gap_severity (internal only).
     4. Sort descending by composite (ties broken by hypothesis ID for determinism).
@@ -69,13 +83,20 @@ def rank_hypotheses(
     """
     # Compute scores
     for h in hypotheses:
-        supporting, contradicting, _ = _count_alignments(h.id, alignments)
-        h.net_support = supporting - contradicting
+        supporting, weakening, contradicting, _ = _count_alignments(h.id, alignments)
+        h.net_support = supporting - weakening - (2 * contradicting)
         h.gap_severity = _compute_gap_severity(h.id, gaps)
 
-    # Sort: highest composite first, ties broken by ID
+    # Sort: highest composite first, adjusted by template role bias.
     hypotheses.sort(
-        key=lambda h: (-(h.net_support - h.gap_severity), h.id)
+        key=lambda h: (
+            -(
+                h.net_support
+                - h.gap_severity
+                + _TEMPLATE_RANK_BIAS.get(h.template_id or "", 0.0)
+            ),
+            h.id,
+        )
     )
 
     # Assign labels

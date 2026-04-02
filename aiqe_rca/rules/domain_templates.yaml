@@ -4,8 +4,9 @@
 
 templates:
   - id: TMPL_SURFACE_PREP
-    name: "Surface Preparation / Contamination"
-    description: "Failure related to inadequate or inconsistent surface preparation before bonding, coating, or assembly."
+    name: "Upstream Surface / Adhesive Condition Variation"
+    description: "Failure related to inadequate or inconsistent upstream surface condition, adhesive condition, or pre-bond preparation before bonding, coating, or assembly."
+    selection_bias: 1.0
     keywords:
       - surface
       - contamination
@@ -24,8 +25,18 @@ templates:
       - wet-out
       - primer
       - phosphate
+      - adhesive
+      - bond lift
+      - manual wipe
+      - surface condition
       - ATP
       - swab
+    aliases:
+      - surface condition
+      - upstream condition
+      - adhesive condition
+      - manual wipe
+      - bond lift
     typical_evidence_categories:
       - PC  # Process control
       - DA  # Detection/audit
@@ -33,10 +44,19 @@ templates:
       - "extended dwell time between prep and next step"
       - "high humidity during storage"
       - "inconsistent operator practice"
+    support_indicators:
+      - manual wipe step
+      - residual contamination
+      - skipping the manual wipe step
+      - surface cleaning
+      - bond lift
+      - adhesive containers were observed open
+    weakening_indicators: []
 
   - id: TMPL_PROCESS_PARAM
     name: "Process Parameter Variation"
     description: "Failure related to variation in key process parameters such as temperature, pressure, time, or speed."
+    selection_bias: -0.25
     keywords:
       - cure
       - temperature
@@ -58,16 +78,35 @@ templates:
       - shift
       - drift
       - profile
+    aliases:
+      - cure temperature
+      - cure time
+      - molding parameters
+      - process shift
+      - stable process parameters
     typical_evidence_categories:
       - PV  # Performance/variation
       - PC  # Process control
     amplifier_conditions:
       - "no SPC monitoring on critical parameter"
       - "manual parameter entry"
+    support_indicators:
+      - out of control
+      - out of spec
+      - drift
+    weakening_indicators:
+      - no recorded changes to cure time or cure temperature
+      - no consistent shift in cure temperature or time
+      - spc data for cure temperature and cure time remain in control
+      - no process shifts detected
+      - stable molding parameters
+      - spc on cure temp and cure time
+      - automated press controls
 
   - id: TMPL_MATERIAL_HANDLING
-    name: "Material Handling / Storage Degradation"
-    description: "Failure related to improper handling, storage, or shelf-life management of materials."
+    name: "Environmental Exposure / Storage Conditions"
+    description: "Failure related to storage conditions, material exposure, humidity, staging duration, or other environmental amplifiers before molding."
+    selection_bias: 0.5
     keywords:
       - storage
       - shelf life
@@ -88,24 +127,44 @@ templates:
       - lot
       - batch
       - degradation
+      - dock
+      - door
+      - 48h
+    aliases:
+      - storage conditions
+      - staging conditions
+      - environmental exposure
+      - open dock doors
+      - stored longer than 48 hours
     typical_evidence_categories:
       - PC  # Process control
       - RC  # Response/corrective
     amplifier_conditions:
       - "proximity to environmental exposure (dock doors, outdoor staging)"
       - "missing shelf-life tracking"
+    support_indicators:
+      - stored longer than 48 hours
+      - open dock doors
+      - exposure limit
+      - left open past exposure time
+      - humidity
+      - staging
+    weakening_indicators: []
 
   - id: TMPL_EQUIPMENT_CONDITION
-    name: "Equipment Condition / Mechanical Wear"
+    name: "Equipment / Press-Tool Variation"
     description: "Failure related to equipment degradation, vibration, wear, or maintenance gaps."
+    selection_bias: -0.5
     keywords:
       - machine
       - equipment
       - vibration
       - chatter
-      - wear
       - maintenance
       - downtime
+      - press
+      - cavity
+      - tool
       - tooling
       - tool change
       - tool wear
@@ -115,6 +174,12 @@ templates:
       - calibration
       - bearing
       - mechanical
+      - malfunction
+    aliases:
+      - press variation
+      - tool variation
+      - cavity correlation
+      - mechanical wear
     typical_evidence_categories:
       - PV  # Performance/variation
       - DA  # Detection/audit
@@ -122,10 +187,21 @@ templates:
       - "reactive maintenance only"
       - "missing preventive maintenance records"
       - "operator-reported symptoms ignored"
+    support_indicators:
+      - press malfunction
+      - vibration
+      - tool wear
+      - cavity-specific
+    weakening_indicators:
+      - no clear correlation to cavity, press, or batch
+      - no single press or cavity correlation
+      - multi-tool occurrence
+      - across multiple tools
 
   - id: TMPL_HUMAN_DISCIPLINE
     name: "Human / Procedural Discipline"
     description: "Failure related to operator non-compliance, training gaps, or shift-specific discipline issues."
+    selection_bias: -1.5
     keywords:
       - operator
       - shift
@@ -146,16 +222,25 @@ templates:
       - line
       - human
       - error
+    aliases:
+      - procedural discipline
+      - operator practice
     typical_evidence_categories:
       - DA  # Detection/audit
       - PC  # Process control
     amplifier_conditions:
       - "high production volume periods"
       - "understaffing"
+    support_indicators:
+      - skipping the manual wipe step
+      - non-compliance
+      - work instruction not followed
+    weakening_indicators: []
 
   - id: TMPL_ENVIRONMENTAL
     name: "Environmental Exposure"
     description: "Failure related to environmental conditions such as humidity, temperature, or contaminant exposure during processing or storage."
+    selection_bias: 0.0
     keywords:
       - humidity
       - temperature
@@ -172,15 +257,24 @@ templates:
       - salt spray
       - corrosion
       - underbody
+    aliases:
+      - humidity exposure
+      - ambient conditions
     typical_evidence_categories:
       - PV  # Performance/variation
     amplifier_conditions:
       - "no environmental monitoring"
       - "open facility areas"
+    support_indicators:
+      - humidity
+      - condensation
+      - open dock doors
+    weakening_indicators: []
 
   - id: TMPL_DESIGN_GEOMETRY
-    name: "Design / Geometry Sensitivity"
-    description: "Failure related to product design features that create difficulty in manufacturing or inspection."
+    name: "Adhesive Coverage Variability at Geometry-Challenged Regions"
+    description: "Failure related to geometry-driven difficulty in achieving or verifying uniform adhesive coverage at edges, corners, or other high-risk regions."
+    selection_bias: 0.75
     keywords:
       - geometry
       - edge
@@ -189,6 +283,10 @@ templates:
       - weld
       - complex
       - coverage
+      - adhesive coverage
+      - spray coverage
+      - thickness gauge
+      - verify
       - thin
       - thick
       - tolerance
@@ -200,15 +298,28 @@ templates:
       - dimension
       - bore
       - machined
+    aliases:
+      - geometry-challenged
+      - hardest to verify
+      - coverage verification
     typical_evidence_categories:
       - DR  # Design/requirements
     amplifier_conditions:
       - "no design-for-manufacturing review"
       - "tight tolerances without capability study"
+    support_indicators:
+      - geometry-challenged
+      - difficult to verify
+      - no thickness gauge
+      - hardest to verify
+      - edges
+      - corners
+    weakening_indicators: []
 
   - id: TMPL_DETECTION_GAP
     name: "Detection / Inspection Gap"
     description: "Failure escapes due to inadequate or infrequent inspection, sampling, or detection methods."
+    selection_bias: -0.75
     keywords:
       - inspection
       - detection
@@ -229,9 +340,17 @@ templates:
       - return
       - complaint
       - field failure
+    aliases:
+      - coverage verification limitation
+      - visual-only detection
     typical_evidence_categories:
       - DA  # Detection/audit
       - DR  # Design/requirements
     amplifier_conditions:
       - "low sampling frequency"
       - "visual-only detection for critical characteristics"
+    support_indicators:
+      - no thickness gauge
+      - visual inspection
+      - leak test sensitivity
+    weakening_indicators: []

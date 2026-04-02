@@ -9,6 +9,7 @@ class AlignmentLabel(str, Enum):
     """Evidence-to-hypothesis relationship classification."""
 
     SUPPORTING = "supporting"
+    WEAKENING = "weakening"
     CONTRADICTING = "contradicting"
     INDETERMINATE = "indeterminate"
 

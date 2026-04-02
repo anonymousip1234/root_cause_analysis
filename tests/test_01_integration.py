@@ -7,6 +7,7 @@ Uses Test01_LabTestReport.docx as input.
 """
 
 import os
+import json
 from pathlib import Path
 
 import pytest
@@ -17,9 +18,11 @@ from aiqe_rca.models.hypothesis import RankLabel
 from aiqe_rca.models.report import ConfidenceLevel
 from aiqe_rca.report.generator import generate_report
 from aiqe_rca.report.language_lint import lint_report
+from aiqe_rca.report.renderer import render_json
 
 DOCS_DIR = Path(__file__).parent.parent / "docs"
 LAB_REPORT_PATH = DOCS_DIR / "Test01_LabTestReport.docx"
+PFMEA_PATH = DOCS_DIR / "Test01_PFMEA.pdf"
 
 PROBLEM_STATEMENT = (
     "Intermittent rubber-to-metal bond failures at final inspection on one product family. "
@@ -34,6 +37,8 @@ def test01_files():
     files = {}
     if LAB_REPORT_PATH.exists():
         files["Test01_LabTestReport.docx"] = LAB_REPORT_PATH.read_bytes()
+    if PFMEA_PATH.exists():
+        files["Test01_PFMEA.pdf"] = PFMEA_PATH.read_bytes()
     return files
 
 
@@ -72,6 +77,54 @@ class TestCase01:
             ConfidenceLevel.MEDIUM,
             ConfidenceLevel.HIGH,
         )
+
+    def test_test01_matches_canonical_ranking(self, test01_files):
+        """Canonical Test 1 should favor upstream surface condition over cure/equipment."""
+        result = run_analysis(PROBLEM_STATEMENT, test01_files)
+
+        assert result.hypotheses[0].template_id == "TMPL_SURFACE_PREP"
+        assert result.hypotheses[1].template_id == "TMPL_DESIGN_GEOMETRY"
+        assert any(
+            h.template_id == "TMPL_MATERIAL_HANDLING"
+            and h.rank_label == RankLabel.CONDITIONAL_AMPLIFIER
+            for h in result.hypotheses
+        )
+        assert result.confidence == ConfidenceLevel.MEDIUM
+
+    def test_test01_explicitly_weaken_false_leads(self, test01_files):
+        """Cure and press/tool explanations should be explicitly weakened."""
+        result = run_analysis(PROBLEM_STATEMENT, test01_files)
+        report = generate_report(
+            result,
+            compute_input_hash(PROBLEM_STATEMENT, test01_files),
+            "2025-01-01T00:00:00Z",
+        )
+
+        relationships = getattr(report, "_template_data", {}).get("relationship_entries", [])
+        process_weakened = any(
+            item["template_id"] == "TMPL_PROCESS_PARAM" and item["relationship"] == "weakening"
+            for item in relationships
+        )
+        assert process_weakened
+        assert "equipment-only explanation" in report.sections[0].content
+        assert "[weakening] Alternative explanations: Multi-tool and multi-lot occurrence weakens a press, cavity, or equipment-only explanation." in report.sections[2].content
+
+    def test_test01_report_contains_relationship_tags_and_gaps(self, test01_files):
+        """Diagnostic evidence section must carry explicit tags and confidence-limiting gaps."""
+        result = run_analysis(PROBLEM_STATEMENT, test01_files)
+        report = generate_report(
+            result,
+            compute_input_hash(PROBLEM_STATEMENT, test01_files),
+            "2025-01-01T00:00:00Z",
+        )
+        diagnostic = report.sections[2].content
+        assert "[supporting]" in diagnostic
+        assert "[weakening]" in diagnostic
+        assert "[gap]" in diagnostic
+        assert "Adhesive handling variability" in diagnostic
+        assert "Storage / staging conditions" in diagnostic
+        assert "Environmental humidity exposure" in diagnostic
+        assert "Adhesive coverage verification" in diagnostic
 
     def test_report_has_5_sections(self, test01_files):
         """Generated report has exactly 5 sections."""
@@ -129,3 +182,12 @@ class TestCase01:
         report = generate_report(result, input_hash, "2025-01-01T00:00:00Z")
         assert len(report.evidence_trace_map) > 0
         assert "Test01_LabTestReport.docx" in report.evidence_trace_map
+
+    def test_report_json_includes_stateless_metadata(self, test01_files):
+        """Machine-readable JSON should expose explicit stateless execution metadata."""
+        result = run_analysis(PROBLEM_STATEMENT, test01_files)
+        input_hash = compute_input_hash(PROBLEM_STATEMENT, test01_files)
+        report = generate_report(result, input_hash, "2025-01-01T00:00:00Z")
+        payload = json.loads(render_json(report))
+        assert payload["analysis"]["stateless_execution"]["isolated_per_request"] is True
+        assert payload["analysis"]["stateless_execution"]["shared_request_context"] is False
