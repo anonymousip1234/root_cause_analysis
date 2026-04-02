@@ -1,0 +1,20 @@
+{
+  "input_hash": "86fe5901a6b194f8b6791155969e3e71123781ae3092d0881cc04c9d676f0e48",
+  "timestamp": "2026-04-02T11:11:01.900122+00:00",
+  "trace_map": [
+    {
+      "source_file": "Test01A_ControlPlan_FULL.xlsx",
+      "evidence_ids": [
+        "E-9caa48cf-93a0-5c60-8551-8f8219af6d7a",
+        "E-dffd9e57-42b9-552c-86fe-b185f4801bd9",
+        "E-fe15bb98-02cd-53cb-8708-c3e3a908b567",
+        "E-eb4515ce-077e-5a4d-9dbe-57806aef1e08",
+        "E-84e3f04f-08d8-560e-b3b6-defa300c1ba5"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "Test01A_ControlPlan_FULL.xlsx"
+  ]
+}

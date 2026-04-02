@@ -1,0 +1,20 @@
+{
+  "input_hash": "b9653eb3acfd9ae01f8616f5532572cde62740bd5344995c0ed0585908e1484b",
+  "timestamp": "2026-04-02T05:23:33.031651+00:00",
+  "trace_map": [
+    {
+      "source_file": "sample_report.pdf",
+      "evidence_ids": [
+        "E-9a8f86a8-9101-5dc0-ac24-87603fbc5909",
+        "E-0cfc4b45-8c68-5721-ad8c-ee28478386e0",
+        "E-a3fdbc50-91fd-51c0-8b81-88ea0b383a6b",
+        "E-2c4d4604-befa-50a1-94dd-1c37e655ade5",
+        "E-d950012e-9bcd-50c0-ae16-194d1d141194"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "sample_report.pdf"
+  ]
+}
