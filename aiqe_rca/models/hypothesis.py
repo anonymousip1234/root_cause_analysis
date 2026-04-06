@@ -12,6 +12,7 @@ class RankLabel(str, Enum):
     PRIMARY = "Primary Contributor"
     SECONDARY = "Secondary Contributor"
     CONDITIONAL_AMPLIFIER = "Conditional Amplifier"
+    DEPRIORITIZED = "Deprioritized Alternative"
     UNRANKED = "Unranked"
 
 

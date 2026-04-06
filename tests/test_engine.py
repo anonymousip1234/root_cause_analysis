@@ -81,7 +81,7 @@ def test_classify_contradicting():
     assert result.classification == AlignmentLabel.CONTRADICTING
 
 
-def test_classify_weakening():
+def test_classify_contradicting_process_false_lead():
     h = Hypothesis(
         id="H1",
         description="Process parameter variation",
@@ -89,6 +89,18 @@ def test_classify_weakening():
         keywords=["cure", "temperature", "cure time", "cure temperature", "stable process parameters"],
     )
     e = _make_evidence("E2", "SPC data for cure temperature and cure time remain in control with no process shifts detected")
+    result = classify_alignment(h, e)
+    assert result.classification == AlignmentLabel.CONTRADICTING
+
+
+def test_classify_weakening():
+    h = Hypothesis(
+        id="H1",
+        description="Equipment variation",
+        template_id="TMPL_EQUIPMENT_CONDITION",
+        keywords=["press", "cavity", "equipment"],
+    )
+    e = _make_evidence("E2", "Some lots passed with no defects while adjacent lots in time sequence showed intermittent fallout")
     result = classify_alignment(h, e)
     assert result.classification == AlignmentLabel.WEAKENING
 

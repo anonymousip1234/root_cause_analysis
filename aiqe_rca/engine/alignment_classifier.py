@@ -81,20 +81,26 @@ def _load_template_map() -> dict[str, dict]:
 _TEMPLATE_MAP = _load_template_map()
 
 
+def _normalize_text(text: str) -> str:
+    """Normalize whitespace for phrase matching."""
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
 def _has_indicator(text: str, indicators: list[str]) -> tuple[int, list[str]]:
     """Return count and the matched indicator phrases."""
-    text_lower = text.lower()
+    text_lower = _normalize_text(text)
     matches: list[str] = []
     for indicator in indicators:
-        if indicator.lower() in text_lower:
+        pattern = r"\b" + re.escape(_normalize_text(indicator)) + r"\b"
+        if re.search(pattern, text_lower):
             matches.append(indicator)
     return len(matches), matches
 
 
 def _check_negation_context(text: str, phrase: str) -> bool:
     """Check if a phrase appears in a negated context."""
-    text_lower = text.lower()
-    phrase_lower = phrase.lower()
+    text_lower = _normalize_text(text)
+    phrase_lower = _normalize_text(phrase)
     idx = text_lower.find(phrase_lower)
     if idx < 0:
         return False
@@ -152,7 +158,7 @@ def classify_alignment(
     pattern_relevance = sum(
         1
         for phrase in support_patterns + weakening_patterns + contradiction_patterns
-        if phrase.lower() in text.lower()
+        if re.search(r"\b" + re.escape(_normalize_text(phrase)) + r"\b", _normalize_text(text))
     )
     if relevance == 0 and pattern_relevance == 0:
         return AlignmentResult(

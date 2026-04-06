@@ -20,6 +20,13 @@ _TEMPLATE_RANK_BIAS = {
     "TMPL_DETECTION_GAP": -1.5,
 }
 
+_FALSE_LEAD_TEMPLATES = {
+    "TMPL_PROCESS_PARAM",
+    "TMPL_EQUIPMENT_CONDITION",
+    "TMPL_HUMAN_DISCIPLINE",
+    "TMPL_DETECTION_GAP",
+}
+
 
 def _count_alignments(
     hypothesis_id: str, alignments: list[AlignmentResult]
@@ -82,8 +89,10 @@ def rank_hypotheses(
         Hypotheses sorted and labeled (modified in-place and returned).
     """
     # Compute scores
+    counts_by_hypothesis: dict[str, tuple[int, int, int, int]] = {}
     for h in hypotheses:
-        supporting, weakening, contradicting, _ = _count_alignments(h.id, alignments)
+        supporting, weakening, contradicting, indeterminate = _count_alignments(h.id, alignments)
+        counts_by_hypothesis[h.id] = (supporting, weakening, contradicting, indeterminate)
         h.net_support = supporting - weakening - (2 * contradicting)
         h.gap_severity = _compute_gap_severity(h.id, gaps)
 
@@ -101,10 +110,13 @@ def rank_hypotheses(
 
     # Assign labels
     for idx, h in enumerate(hypotheses):
+        supporting, weakening, contradicting, _ = counts_by_hypothesis.get(h.id, (0, 0, 0, 0))
         if idx == 0:
             h.rank_label = RankLabel.PRIMARY
         elif idx == 1:
             h.rank_label = RankLabel.SECONDARY
+        elif h.template_id in _FALSE_LEAD_TEMPLATES and (contradicting > 0 or weakening >= supporting):
+            h.rank_label = RankLabel.DEPRIORITIZED
         else:
             h.rank_label = RankLabel.CONDITIONAL_AMPLIFIER
 

@@ -32,6 +32,7 @@ class AnalysisResult(BaseModel):
     """Complete output of the deterministic engine pipeline (pre-report)."""
 
     evidence_elements: list[EvidenceElement]
+    pre_ranking_hypotheses: list[Hypothesis] = Field(default_factory=list)
     hypotheses: list[Hypothesis]
     alignments: list[AlignmentResult]
     gaps: list[DataGap]

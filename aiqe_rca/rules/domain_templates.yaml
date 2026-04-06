@@ -95,6 +95,9 @@ templates:
       - out of spec
       - drift
     weakening_indicators:
+      - some lots passed with no defects
+      - adjacent lots in time sequence
+    contradicting_indicators:
       - no recorded changes to cure time or cure temperature
       - no consistent shift in cure temperature or time
       - spc data for cure temperature and cure time remain in control
@@ -193,6 +196,8 @@ templates:
       - tool wear
       - cavity-specific
     weakening_indicators:
+      - some lots passed with no defects
+    contradicting_indicators:
       - no clear correlation to cavity, press, or batch
       - no single press or cavity correlation
       - multi-tool occurrence

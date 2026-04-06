@@ -90,17 +90,13 @@ def render_json(report: ReportOutput) -> str:
     if report.analysis_result:
         analysis = {
             "hypotheses": tdata.get("hypotheses", []),
+            "pre_ranking_hypotheses": tdata.get("reasoning_artifacts", {}).get(
+                "pre_ranking_hypotheses", []
+            ),
             "evidence_relationships": tdata.get("relationship_entries", []),
             "contradictions": tdata.get("contradictions", []),
-            "gaps": [
-                {
-                    "category": gap.category.value,
-                    "description": gap.description,
-                    "severity": gap.severity.value,
-                    "affects_hypotheses": gap.affects_hypotheses,
-                }
-                for gap in report.analysis_result.gaps
-            ],
+            "gaps": tdata.get("reasoning_artifacts", {}).get("gap_log", []),
+            "reasoning_artifacts": tdata.get("reasoning_artifacts", {}),
             "confidence": report.analysis_result.confidence.value,
             "stateless_execution": {
                 "isolated_per_request": True,

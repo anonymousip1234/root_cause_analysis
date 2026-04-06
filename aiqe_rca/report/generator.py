@@ -1,7 +1,7 @@
 """Report generator.
 
 Assembles the 5-section report from AnalysisResult and exposes a richer
-machine-readable payload for validation, debugging, and canonical testing.
+reasoning artifact package for canonical evaluation.
 """
 
 import re
@@ -17,26 +17,21 @@ FALLBACKS = {
         "Summary limited: available inputs do not contain enough structured "
         "evidence to produce a reliable synthesis."
     ),
-    "contributing_hypotheses": (
-        "No defensible hypotheses can be ranked from the current inputs."
-    ),
+    "contributing_hypotheses": "No defensible hypotheses can be ranked from the current inputs.",
     "diagnostic_evidence": (
-        "Evidence mapping unavailable: inputs could not be parsed into "
-        "traceable evidence elements."
+        "Evidence mapping unavailable: inputs could not be parsed into traceable evidence elements."
     ),
     "testing_validation": (
-        "Investigation focus cannot be prioritized until additional "
-        "targeted evidence is available."
+        "Investigation focus cannot be prioritized until additional targeted evidence is available."
     ),
-    "analysis_confidence_statement": (
-        "Insufficient evidence to state this reliably."
-    ),
+    "analysis_confidence_statement": "Insufficient evidence to state this reliably.",
 }
 
 _RANK_DISPLAY = {
     RankLabel.PRIMARY: "Primary Contributor",
     RankLabel.SECONDARY: "Secondary Contributor",
     RankLabel.CONDITIONAL_AMPLIFIER: "Conditional Amplifier",
+    RankLabel.DEPRIORITIZED: "Deprioritized Alternative",
     RankLabel.UNRANKED: "Unranked",
 }
 
@@ -50,22 +45,22 @@ _DESCRIPTION_BY_TEMPLATE = {
         "and harder to verify with the current controls."
     ),
     "TMPL_MATERIAL_HANDLING": (
-        "Storage duration, staging conditions, and environmental exposure may amplify the "
-        "failure when upstream surface or adhesive variation is already present."
+        "Storage duration, staging conditions, and environmental exposure appear to amplify "
+        "the failure when upstream variation is already present."
     ),
     "TMPL_PROCESS_PARAM": (
-        "Cure and molding parameter variation was evaluated, but current evidence does not "
-        "support it as the primary explanation."
+        "Cure and molding parameter variation was evaluated, but contradictory evidence keeps "
+        "it below the leading explanations."
     ),
     "TMPL_EQUIPMENT_CONDITION": (
-        "Press, cavity, or tool-driven variation was considered, but the observed pattern "
-        "does not currently point to a single equipment source."
+        "Press, cavity, or tool-driven variation was evaluated, but contradictory evidence "
+        "does not support a single equipment source."
     ),
 }
 
 
 def _get_hypothesis_description(hypothesis: Hypothesis) -> str:
-    """Return a concise analytical description for the ranked hypothesis."""
+    """Return a concise analytical description for the hypothesis."""
     return _DESCRIPTION_BY_TEMPLATE.get(hypothesis.template_id or "", hypothesis.description)
 
 
@@ -87,8 +82,7 @@ def _describe_source(filename: str) -> str:
 
 def _clean_text(text: str) -> str:
     """Normalize spacing and list markers for evidence summaries."""
-    text = re.sub(r"\s+", " ", text.replace("•", "-")).strip()
-    return text.strip("- ").strip()
+    return re.sub(r"\s+", " ", text.replace("•", "-")).strip().strip("- ").strip()
 
 
 def _summarize_evidence(evidence: EvidenceElement) -> str:
@@ -123,22 +117,20 @@ def _alignment_priority(alignment: AlignmentResult) -> tuple[int, str]:
     return (label_priority.get(alignment.classification, 9), alignment.evidence_id)
 
 
-def _build_hypotheses_list(result: AnalysisResult) -> list[dict]:
-    """Build the hypothesis list used in section 2 and JSON output."""
-    items = []
-    for hypothesis in result.hypotheses:
-        items.append(
-            {
-                "id": hypothesis.id,
-                "name": hypothesis.process_step,
-                "rank": _RANK_DISPLAY.get(hypothesis.rank_label, "Unranked"),
-                "template_id": hypothesis.template_id,
-                "description": _get_hypothesis_description(hypothesis),
-                "net_support": hypothesis.net_support,
-                "gap_severity": hypothesis.gap_severity,
-            }
-        )
-    return items
+def _build_hypotheses_list(hypotheses: list[Hypothesis]) -> list[dict]:
+    """Build a hypothesis list for report and JSON output."""
+    return [
+        {
+            "id": hypothesis.id,
+            "name": hypothesis.process_step,
+            "rank": _RANK_DISPLAY.get(hypothesis.rank_label, "Unranked"),
+            "template_id": hypothesis.template_id,
+            "description": _get_hypothesis_description(hypothesis),
+            "net_support": hypothesis.net_support,
+            "gap_severity": hypothesis.gap_severity,
+        }
+        for hypothesis in hypotheses
+    ]
 
 
 def _build_executive_summary(result: AnalysisResult) -> list[str]:
@@ -149,7 +141,12 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
     primary = next((h for h in result.hypotheses if h.rank_label == RankLabel.PRIMARY), None)
     secondary = next((h for h in result.hypotheses if h.rank_label == RankLabel.SECONDARY), None)
     amplifier = next(
-        (h for h in result.hypotheses if h.rank_label == RankLabel.CONDITIONAL_AMPLIFIER),
+        (
+            h
+            for h in result.hypotheses
+            if h.rank_label == RankLabel.CONDITIONAL_AMPLIFIER
+            and h.template_id in {"TMPL_MATERIAL_HANDLING", "TMPL_ENVIRONMENTAL"}
+        ),
         None,
     )
 
@@ -157,18 +154,17 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
         return [FALLBACKS["executive_diagnostic_summary"]]
 
     paragraph_one = (
-        f"AIQE identified a pattern most consistent with {primary.process_step.lower()} "
-        f"rather than a stable molding or equipment-only explanation. "
-        f"The observed blistering remains intermittent across lots, and the available inputs "
-        f"do not show a single fixed press, cavity, or cure-parameter shift."
+        f"AIQE identified a pattern most consistent with {primary.process_step.lower()} rather than "
+        "a stable molding or equipment-only explanation. The observed blistering remains intermittent "
+        "across lots, and the current inputs do not show a single fixed press, cavity, or cure-parameter shift."
     )
 
-    paragraph_two_parts = []
+    paragraph_two_parts: list[str] = []
     if secondary is not None:
         paragraph_two_parts.append(
             f"The strongest secondary contributor is {secondary.process_step.lower()}."
         )
-    if amplifier is not None and amplifier.template_id in {"TMPL_MATERIAL_HANDLING", "TMPL_ENVIRONMENTAL"}:
+    if amplifier is not None:
         paragraph_two_parts.append(
             f"{amplifier.process_step} appears to act as an amplifier rather than a stand-alone root cause."
         )
@@ -182,7 +178,7 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
 
 
 def _build_relationship_entries(result: AnalysisResult) -> list[dict]:
-    """Build explicit evidence-hypothesis relationship entries for report JSON."""
+    """Build explicit evidence-hypothesis relationship entries."""
     evidence_map = {e.id: e for e in result.evidence_elements}
     hypothesis_map = {h.id: h for h in result.hypotheses}
     entries: list[dict] = []
@@ -197,48 +193,137 @@ def _build_relationship_entries(result: AnalysisResult) -> list[dict]:
                 "hypothesis_id": hypothesis.id,
                 "hypothesis_name": hypothesis.process_step,
                 "template_id": hypothesis.template_id,
-                "evidence_id": evidence.id,
                 "source": evidence.source,
+                "source_display": _describe_source(evidence.source),
+                "evidence_id": evidence.id,
+                "evidence_summary": _summarize_evidence(evidence),
                 "relationship": alignment.classification.value,
                 "rationale": alignment.rationale,
-                "evidence_summary": _summarize_evidence(evidence),
             }
         )
+
     return entries
 
 
-def _find_global_contradictions(result: AnalysisResult) -> list[str]:
-    """Surface contradictions and false-lead deprioritization explicitly."""
-    all_text = " ".join(e.text_content.lower() for e in result.evidence_elements)
-    contradictions: list[str] = []
+def _build_contradiction_log(result: AnalysisResult) -> list[dict]:
+    """Build a structured contradiction log, including non-ranked false leads."""
+    contradictions: list[dict] = []
+    for evidence in result.evidence_elements:
+        text_lower = evidence.text_content.lower()
+        summary = _summarize_evidence(evidence)
 
-    if (
-        "intermittent" in all_text
-        and (
-            "no consistent shift in cure temperature or time" in all_text
-            or "spc data for cure temperature and cure time remain in control" in all_text
-            or "no recorded changes to cure time or cure temperature" in result.problem_statement.lower()
+        if (
+            "no consistent shift in cure temperature or time" in text_lower
+            or "spc data for cure temperature and cure time remain in control" in text_lower
+            or "no recorded changes to cure time or cure temperature" in text_lower
+        ):
+            contradictions.append(
+                {
+                    "source": evidence.source,
+                    "source_display": _describe_source(evidence.source),
+                    "evidence": summary,
+                    "hypothesis": "Process Parameter Variation",
+                    "tag": "contradictory",
+                    "reason": "Stable SPC and cure settings contradict a primary process-variation explanation.",
+                }
+            )
+
+        if (
+            "no clear correlation to cavity, press, or batch" in text_lower
+            or "no single press or cavity correlation" in text_lower
+            or "across multiple tools" in text_lower
+        ):
+            contradictions.append(
+                {
+                    "source": evidence.source,
+                    "source_display": _describe_source(evidence.source),
+                    "evidence": summary,
+                    "hypothesis": "Equipment / Press-Tool Variation",
+                    "tag": "contradictory",
+                    "reason": "Multi-tool occurrence without a fixed press or cavity correlation contradicts an equipment-driven explanation.",
+                }
+            )
+
+    unique: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in contradictions:
+        key = (item["source"], item["hypothesis"], item["reason"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
+
+
+def _build_gap_log(result: AnalysisResult) -> list[dict]:
+    """Build a clean gap log."""
+    return [
+        {
+            "category": gap.category.value,
+            "description": gap.description,
+            "severity": gap.severity.value,
+            "affects_hypotheses": gap.affects_hypotheses,
+        }
+        for gap in result.gaps
+    ]
+
+
+def _build_prioritization_summary(
+    result: AnalysisResult,
+    relationship_entries: list[dict],
+) -> list[dict]:
+    """Summarize why each hypothesis was prioritized or deprioritized."""
+    summary: list[dict] = []
+    for hypothesis in result.hypotheses:
+        supporting = sum(
+            1
+            for entry in relationship_entries
+            if entry["hypothesis_id"] == hypothesis.id and entry["relationship"] == "supporting"
         )
-    ):
-        contradictions.append(
-            "Stable cure parameters weaken a primary cure-variation explanation because the defect remains intermittent across lots."
+        weakening = sum(
+            1
+            for entry in relationship_entries
+            if entry["hypothesis_id"] == hypothesis.id and entry["relationship"] == "weakening"
+        )
+        contradicting = sum(
+            1
+            for entry in relationship_entries
+            if entry["hypothesis_id"] == hypothesis.id and entry["relationship"] == "contradicting"
         )
 
-    if (
-        "no clear correlation to cavity, press, or batch" in all_text
-        or "no single press or cavity correlation" in all_text
-    ):
-        contradictions.append(
-            "Multi-tool and multi-lot occurrence weakens a press, cavity, or equipment-only explanation."
-        )
+        if hypothesis.rank_label == RankLabel.PRIMARY:
+            basis = "Ranked first because direct supporting evidence outweighed all negative evidence."
+        elif hypothesis.rank_label == RankLabel.SECONDARY:
+            basis = "Retained as secondary because defect localization evidence remained directly relevant."
+        elif hypothesis.rank_label == RankLabel.CONDITIONAL_AMPLIFIER:
+            basis = "Treated as an amplifier because the evidence is indirect and confidence-limiting gaps remain."
+        else:
+            basis = "Deprioritized because weakening or contradictory evidence outweighed its direct support."
 
-    return contradictions
+        summary.append(
+            {
+                "hypothesis": hypothesis.process_step,
+                "outcome": _RANK_DISPLAY.get(hypothesis.rank_label, hypothesis.rank_label.value),
+                "supporting_count": supporting,
+                "weakening_count": weakening,
+                "contradicting_count": contradicting,
+                "basis": basis,
+            }
+        )
+    return summary
+
+
+def _build_stateless_note(input_hash: str) -> str:
+    """Explain the stateless execution contract explicitly."""
+    return (
+        "Each analysis request is isolated and deterministic. No prior report vocabulary or session "
+        f"memory is reused, and the current input package is captured by input hash {input_hash}."
+    )
 
 
 def _build_diagnostic_bullets(
     result: AnalysisResult,
     relationship_entries: list[dict],
-    contradictions: list[str],
+    contradiction_log: list[dict],
 ) -> list[str]:
     """Build explicitly tagged diagnostic bullets."""
     bullets: list[str] = []
@@ -254,7 +339,7 @@ def _build_diagnostic_bullets(
             entry for entry in relationship_entries if entry["hypothesis_id"] == hypothesis.id
         ]
         if hypothesis.template_id in weakening_first_templates:
-            order = {"weakening": 0, "contradicting": 1, "supporting": 2, "indeterminate": 3}
+            order = {"contradicting": 0, "weakening": 1, "supporting": 2, "indeterminate": 3}
             limit = 1
         else:
             order = {"supporting": 0, "weakening": 1, "contradicting": 2, "indeterminate": 3}
@@ -263,11 +348,13 @@ def _build_diagnostic_bullets(
         for entry in matched[:limit]:
             bullets.append(
                 f"[{entry['relationship']}] {hypothesis.process_step}: "
-                f"{_describe_source(entry['source'])} indicates {entry['evidence_summary'].lower()}"
+                f"{entry['source_display']} indicates {entry['evidence_summary'].lower()}"
             )
 
-    for contradiction in contradictions:
-        bullets.append(f"[weakening] Alternative explanations: {contradiction}")
+    for contradiction in contradiction_log:
+        bullets.append(
+            f"[{contradiction['tag']}] {contradiction['hypothesis']}: {contradiction['reason']}"
+        )
 
     for gap in result.gaps:
         bullets.append(
@@ -285,31 +372,26 @@ def _build_action_items(result: AnalysisResult) -> list[str]:
         "Verify adhesive coverage at geometry-challenged regions using a quantitative method instead of visual-only confirmation.",
         "Correlate defect fallout with storage location and humidity-related exposure before molding.",
     ]
-
     if result.confidence.value == "Low":
         actions.insert(
             0,
             "Collect the missing process, audit, and corrective-action records needed to narrow the candidate hypotheses.",
         )
-
     return actions[:4]
 
 
-def _build_confidence_statement(result: AnalysisResult, contradictions: list[str]) -> str:
+def _build_confidence_statement(result: AnalysisResult, contradiction_log: list[dict]) -> str:
     """Explain why the current confidence level is High, Medium, or Low."""
     if result.confidence.value == "High":
         return (
             "Confidence is High because multiple independent evidence streams align on the same primary explanation and there are no major unresolved gaps."
         )
     if result.confidence.value == "Medium":
-        gap_labels = [gap.description for gap in result.gaps[:3]]
-        joined_gaps = " ".join(gap_labels)
-        contradiction_note = (
-            f" Key weakening signals: {' '.join(contradictions[:2])}" if contradictions else ""
-        )
+        gap_labels = [gap.description for gap in result.gaps[:4]]
+        contradiction_note = " ".join(item["reason"] for item in contradiction_log[:2])
         return (
             "Confidence is Medium because the leading explanation is supported by multiple indirect signals, "
-            f"but unresolved gaps remain. {joined_gaps}{contradiction_note}"
+            f"but unresolved gaps remain. {' '.join(gap_labels)} {contradiction_note}"
         ).strip()
     return (
         "Confidence is Low because the available inputs do not provide enough aligned evidence to distinguish between the remaining explanations."
@@ -323,21 +405,24 @@ def generate_report(
 ) -> ReportOutput:
     """Generate the full 5-section report from analysis results."""
     executive_summary = _build_executive_summary(result)
-    hypotheses = _build_hypotheses_list(result)
+    ranked_hypotheses = _build_hypotheses_list(result.hypotheses)
+    pre_ranking_hypotheses = _build_hypotheses_list(result.pre_ranking_hypotheses)
     relationship_entries = _build_relationship_entries(result)
-    contradictions = _find_global_contradictions(result)
-    diagnostic_bullets = _build_diagnostic_bullets(result, relationship_entries, contradictions)
+    contradiction_log = _build_contradiction_log(result)
+    gap_log = _build_gap_log(result)
+    prioritization_summary = _build_prioritization_summary(result, relationship_entries)
+    diagnostic_bullets = _build_diagnostic_bullets(result, relationship_entries, contradiction_log)
     action_items = _build_action_items(result)
-    confidence_statement = _build_confidence_statement(result, contradictions)
+    confidence_statement = _build_confidence_statement(result, contradiction_log)
 
     hypothesis_lines = [
-        f"{item['rank']}: {item['name']} — {item['description']}" for item in hypotheses
+        f"{item['rank']}: {item['name']} - {item['description']}" for item in ranked_hypotheses
     ]
 
     sections = [
         ReportSection(
             title="Executive Diagnostic Summary",
-            content="\n\n".join([p for p in executive_summary if p.strip()]),
+            content="\n\n".join([paragraph for paragraph in executive_summary if paragraph.strip()]),
         ),
         ReportSection(
             title="Most Likely Root Cause Hypotheses",
@@ -371,6 +456,32 @@ def generate_report(
     for evidence in result.evidence_elements:
         trace_map.setdefault(evidence.source, []).append(evidence.id)
 
+    reasoning_artifacts = {
+        "pre_ranking_hypotheses": pre_ranking_hypotheses,
+        "evidence_classification_table": [
+            {
+                "source": entry["source_display"],
+                "evidence": entry["evidence_summary"],
+                "hypothesis": entry["hypothesis_name"],
+                "tag": entry["relationship"],
+            }
+            for entry in relationship_entries
+        ]
+        + [
+            {
+                "source": item["source_display"],
+                "evidence": item["evidence"],
+                "hypothesis": item["hypothesis"],
+                "tag": item["tag"],
+            }
+            for item in contradiction_log
+        ],
+        "contradiction_log": contradiction_log,
+        "gap_log": gap_log,
+        "prioritization_summary": prioritization_summary,
+        "stateless_note": _build_stateless_note(input_hash),
+    }
+
     report = ReportOutput(
         header=result.header,
         sections=sections,
@@ -382,14 +493,15 @@ def generate_report(
 
     report._template_data = {  # type: ignore[attr-defined]
         "executive_summary_paragraphs": executive_summary,
-        "hypotheses": hypotheses,
+        "hypotheses": ranked_hypotheses,
         "why_bullets": diagnostic_bullets,
         "diagnostic_bullets": diagnostic_bullets,
         "actions_intro": "",
         "action_items": action_items,
         "confidence_statement": confidence_statement,
         "relationship_entries": relationship_entries,
-        "contradictions": contradictions,
+        "contradictions": contradiction_log,
+        "reasoning_artifacts": reasoning_artifacts,
     }
 
     return report

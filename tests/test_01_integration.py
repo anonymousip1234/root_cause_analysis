@@ -89,6 +89,11 @@ class TestCase01:
             and h.rank_label == RankLabel.CONDITIONAL_AMPLIFIER
             for h in result.hypotheses
         )
+        assert any(
+            h.template_id == "TMPL_PROCESS_PARAM"
+            and h.rank_label == RankLabel.DEPRIORITIZED
+            for h in result.hypotheses
+        )
         assert result.confidence == ConfidenceLevel.MEDIUM
 
     def test_test01_explicitly_weaken_false_leads(self, test01_files):
@@ -101,13 +106,14 @@ class TestCase01:
         )
 
         relationships = getattr(report, "_template_data", {}).get("relationship_entries", [])
-        process_weakened = any(
-            item["template_id"] == "TMPL_PROCESS_PARAM" and item["relationship"] == "weakening"
+        process_contradicted = any(
+            item["template_id"] == "TMPL_PROCESS_PARAM" and item["relationship"] == "contradicting"
             for item in relationships
         )
-        assert process_weakened
+        assert process_contradicted
         assert "equipment-only explanation" in report.sections[0].content
-        assert "[weakening] Alternative explanations: Multi-tool and multi-lot occurrence weakens a press, cavity, or equipment-only explanation." in report.sections[2].content
+        assert "[contradictory] Equipment / Press-Tool Variation:" in report.sections[2].content
+        assert "[contradictory] Process Parameter Variation:" in report.sections[2].content
 
     def test_test01_report_contains_relationship_tags_and_gaps(self, test01_files):
         """Diagnostic evidence section must carry explicit tags and confidence-limiting gaps."""
@@ -119,12 +125,30 @@ class TestCase01:
         )
         diagnostic = report.sections[2].content
         assert "[supporting]" in diagnostic
-        assert "[weakening]" in diagnostic
+        assert "[contradictory]" in diagnostic
         assert "[gap]" in diagnostic
         assert "Adhesive handling variability" in diagnostic
         assert "Storage / staging conditions" in diagnostic
         assert "Environmental humidity exposure" in diagnostic
         assert "Adhesive coverage verification" in diagnostic
+
+    def test_reasoning_artifact_package_is_complete(self, test01_files):
+        """Reasoning artifact package should expose the full canonical audit trail."""
+        result = run_analysis(PROBLEM_STATEMENT, test01_files)
+        report = generate_report(
+            result,
+            compute_input_hash(PROBLEM_STATEMENT, test01_files),
+            "2025-01-01T00:00:00Z",
+        )
+        payload = json.loads(render_json(report))
+        artifacts = payload["analysis"]["reasoning_artifacts"]
+
+        assert len(artifacts["pre_ranking_hypotheses"]) >= 2
+        assert len(artifacts["evidence_classification_table"]) > 0
+        assert len(artifacts["contradiction_log"]) >= 2
+        assert len(artifacts["gap_log"]) >= 4
+        assert len(artifacts["prioritization_summary"]) >= 4
+        assert "isolated and deterministic" in artifacts["stateless_note"]
 
     def test_report_has_5_sections(self, test01_files):
         """Generated report has exactly 5 sections."""

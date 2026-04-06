@@ -106,6 +106,9 @@ def run_analysis(
     # Step 5: Detect data gaps
     gaps = detect_gaps(evidence_elements, hypotheses)
 
+    # Preserve the candidate list before prioritization for reasoning artifacts.
+    pre_ranking_hypotheses = [h.model_copy(deep=True) for h in hypotheses]
+
     # Step 6: Rank hypotheses (Primary / Secondary / Conditional Amplifier)
     hypotheses = rank_hypotheses(hypotheses, alignments, gaps)
 
@@ -117,6 +120,7 @@ def run_analysis(
 
     return AnalysisResult(
         evidence_elements=evidence_elements,
+        pre_ranking_hypotheses=pre_ranking_hypotheses,
         hypotheses=hypotheses,
         alignments=alignments,
         gaps=gaps,

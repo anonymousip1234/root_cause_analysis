@@ -1,6 +1,6 @@
 # Canonical Test 1 Validation
 
-Date: 2026-04-02
+Date: 2026-04-06
 
 ## Input Set
 
@@ -14,7 +14,7 @@ Date: 2026-04-02
 - Primary contributor ranks as upstream surface / adhesive condition variation.
 - Secondary contributor ranks as geometry-driven adhesive coverage variability.
 - Environmental exposure / storage conditions are treated as an amplifier.
-- Cure variation and press/tool variation are explicitly weakened.
+- Cure variation and press/tool variation are explicitly contradicted or weakened with explicit audit entries.
 - Evidence relationships are explicitly tagged as `supporting`, `weakening`, `contradicting`, or `indeterminate`.
 - Contradictions and confidence-limiting gaps are surfaced explicitly.
 - Overall confidence is `Medium`.
@@ -28,10 +28,19 @@ Date: 2026-04-02
 - Deprioritized alternative: `Process Parameter Variation`
 - Confidence: `Medium`
 
-## Explicitly Surfaced False-Lead Weakening
+## Reasoning Artifact Package
 
-- Stable cure parameters weaken a primary cure-variation explanation because the defect remains intermittent across lots.
-- Multi-tool and multi-lot occurrence weakens a press, cavity, or equipment-only explanation.
+- Pre-ranking hypotheses: present
+- Evidence classification table: present
+- Contradiction log: present
+- Gap log: present
+- Prioritization summary: present
+- Stateless note: present
+
+## Explicitly Surfaced False-Lead Rejection
+
+- Stable SPC and cure settings contradict a primary process-variation explanation.
+- Multi-tool occurrence without a fixed press or cavity correlation contradicts an equipment-driven explanation.
 
 ## Explicitly Surfaced Gaps
 
@@ -42,11 +51,18 @@ Date: 2026-04-02
 
 ## Determinism / Statelessness Checks
 
-- `pytest` suite result: `33 passed`
+- `pytest` suite result: `36 passed`
 - Canonical Test 1 integration assertions verify repeated-run determinism.
 - Machine-readable report JSON includes:
   - `analysis.stateless_execution.isolated_per_request = true`
   - `analysis.stateless_execution.shared_request_context = false`
+- Machine-readable report JSON now also includes:
+  - `analysis.pre_ranking_hypotheses`
+  - `analysis.reasoning_artifacts.evidence_classification_table`
+  - `analysis.reasoning_artifacts.contradiction_log`
+  - `analysis.reasoning_artifacts.gap_log`
+  - `analysis.reasoning_artifacts.prioritization_summary`
+  - `analysis.reasoning_artifacts.stateless_note`
 - Evidence association now falls back to deterministic offline lexical matching when the local embedding model is unavailable, so no network state or model-download behavior is required for a canonical run.
 
 ## Generated Output Artifacts
