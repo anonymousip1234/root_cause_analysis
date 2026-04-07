@@ -10,7 +10,7 @@ class AlignmentLabel(str, Enum):
 
     SUPPORTING = "supporting"
     WEAKENING = "weakening"
-    CONTRADICTING = "contradicting"
+    CONTRADICTING = "contradictory"
     INDETERMINATE = "indeterminate"
 
 

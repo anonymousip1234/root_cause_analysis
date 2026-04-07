@@ -107,7 +107,7 @@ class TestCase01:
 
         relationships = getattr(report, "_template_data", {}).get("relationship_entries", [])
         process_contradicted = any(
-            item["template_id"] == "TMPL_PROCESS_PARAM" and item["relationship"] == "contradicting"
+            item["template_id"] == "TMPL_PROCESS_PARAM" and item["relationship"] == "contradictory"
             for item in relationships
         )
         assert process_contradicted

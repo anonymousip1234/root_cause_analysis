@@ -245,9 +245,9 @@ def _build_contradiction_log(result: AnalysisResult) -> list[dict]:
             )
 
     unique: list[dict] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str]] = set()
     for item in contradictions:
-        key = (item["source"], item["hypothesis"], item["reason"])
+        key = (item["hypothesis"], item["reason"])
         if key not in seen:
             seen.add(key)
             unique.append(item)
@@ -287,7 +287,7 @@ def _build_prioritization_summary(
         contradicting = sum(
             1
             for entry in relationship_entries
-            if entry["hypothesis_id"] == hypothesis.id and entry["relationship"] == "contradicting"
+            if entry["hypothesis_id"] == hypothesis.id and entry["relationship"] == "contradictory"
         )
 
         if hypothesis.rank_label == RankLabel.PRIMARY:
@@ -339,10 +339,10 @@ def _build_diagnostic_bullets(
             entry for entry in relationship_entries if entry["hypothesis_id"] == hypothesis.id
         ]
         if hypothesis.template_id in weakening_first_templates:
-            order = {"contradicting": 0, "weakening": 1, "supporting": 2, "indeterminate": 3}
+            order = {"contradictory": 0, "weakening": 1, "supporting": 2, "indeterminate": 3}
             limit = 1
         else:
-            order = {"supporting": 0, "weakening": 1, "contradicting": 2, "indeterminate": 3}
+            order = {"supporting": 0, "weakening": 1, "contradictory": 2, "indeterminate": 3}
             limit = 2
         matched.sort(key=lambda entry: (order.get(entry["relationship"], 9), entry["evidence_id"]))
         for entry in matched[:limit]:
