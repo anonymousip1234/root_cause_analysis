@@ -43,29 +43,17 @@ async def analyze(
         str,
         Form(..., description="Problem description text"),
     ],
-    file: Annotated[
-        UploadFile | None,
-        File(
-            description="Primary document upload. Use this field in Swagger for a direct file picker.",
-        ),
-    ] = None,
     files: Annotated[
-        list[UploadFile] | None,
-        File(
-            description="Additional documents to analyze. You can upload multiple files here.",
-        ),
-    ] = None,
+        list[UploadFile],
+        File(description="Documents to analyze. Upload one or more files (PDF, DOCX, XLSX, CSV, TXT, JSON, JPG, PNG)."),
+    ],
 ):
     """Run a root cause analysis on uploaded documents.
 
     Accepts multiple files (PDF, DOCX, XLSX, CSV, TXT, JSON, JPG, PNG)
     and a problem statement. Returns a deterministic diagnostic report.
     """
-    uploaded_files: list[UploadFile] = []
-    if file is not None:
-        uploaded_files.append(file)
-    if files:
-        uploaded_files.extend(files)
+    uploaded_files: list[UploadFile] = [f for f in files if f.filename]
 
     # Validate files
     if not uploaded_files:

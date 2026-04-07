@@ -6,13 +6,13 @@
 <style>
   @page {
     size: A4;
-    margin: 12mm 14mm;
+    margin: 10mm 12mm;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 9px;
+    line-height: 1.4;
     color: #1a1a1a;
   }
 
@@ -20,56 +20,51 @@
   .report-header {
     display: flex;
     align-items: center;
-    padding: 14px 0;
+    padding: 8px 0;
     border-bottom: 2px solid #222;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
   .logo-img {
-    width: 64px;
-    height: 64px;
+    width: 52px;
+    height: 52px;
     object-fit: contain;
     border-radius: 6px;
-    margin-right: 16px;
+    margin-right: 12px;
     flex-shrink: 0;
   }
   .header-text {
     flex: 1;
   }
   .header-text h1 {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: 0.5px;
     color: #111;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
   .header-meta {
-    font-size: 10px;
+    font-size: 9px;
     color: #333;
-    line-height: 1.6;
+    line-height: 1.5;
   }
-  .header-meta strong {
-    color: #111;
-  }
+  .header-meta strong { color: #111; }
   .problem-statement {
-    font-size: 10px;
+    font-size: 9px;
     color: #333;
-    margin-top: 3px;
-    line-height: 1.6;
+    margin-top: 2px;
+    line-height: 1.5;
   }
-  .problem-statement strong {
-    color: #111;
-  }
+  .problem-statement strong { color: #111; }
 
   /* ── SECTION BOXES ── */
   .section-box {
     border: 1.5px solid #ccc;
-    margin-bottom: 10px;
-    page-break-inside: avoid;
+    margin-bottom: 6px;
   }
   .section-title {
     background: #d0d0d0;
-    padding: 6px 12px;
-    font-size: 11px;
+    padding: 4px 10px;
+    font-size: 10px;
     font-weight: 700;
     color: #111;
     border-bottom: 1.5px solid #ccc;
@@ -80,51 +75,45 @@
     border-bottom-color: #0a4d73;
   }
   .section-body {
-    padding: 10px 12px;
+    padding: 6px 10px;
   }
   .section-body p {
-    margin-bottom: 6px;
-    font-size: 10px;
-    line-height: 1.55;
+    margin-bottom: 4px;
+    font-size: 9px;
+    line-height: 1.45;
   }
-  .section-body p:last-child {
-    margin-bottom: 0;
-  }
+  .section-body p:last-child { margin-bottom: 0; }
 
   /* ── HYPOTHESES ── */
   .hypothesis-item {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     padding-left: 4px;
   }
-  .hypothesis-item:last-child {
-    margin-bottom: 0;
-  }
+  .hypothesis-item:last-child { margin-bottom: 0; }
   .hyp-header {
-    font-size: 10.5px;
+    font-size: 9.5px;
     font-weight: 700;
     color: #111;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
   .hyp-number {
     font-weight: 700;
     color: #111;
     margin-right: 4px;
   }
-  .hyp-rank {
-    font-weight: 700;
-  }
+  .hyp-rank { font-weight: 700; }
   .hyp-description {
-    font-size: 9.5px;
+    font-size: 8.5px;
     color: #333;
-    padding-left: 20px;
-    line-height: 1.5;
+    padding-left: 16px;
+    line-height: 1.4;
   }
 
   /* ── TWO-COLUMN LAYOUT ── */
   .two-col {
     display: flex;
     gap: 0;
-    margin-bottom: 10px;
+    margin-bottom: 0;
   }
   .two-col .col {
     flex: 1;
@@ -133,12 +122,8 @@
   .two-col .col:first-child {
     border-right: none;
   }
-  .col .section-title {
-    font-size: 10.5px;
-  }
-  .col .section-body {
-    padding: 8px 10px;
-  }
+  .col .section-title { font-size: 10px; }
+  .col .section-body { padding: 5px 8px; }
 
   /* ── BULLET LISTS ── */
   .check-list {
@@ -146,10 +131,10 @@
     padding: 0;
   }
   .check-list li {
-    padding: 3px 0 3px 18px;
+    padding: 1px 0 1px 14px;
     position: relative;
-    font-size: 9.5px;
-    line-height: 1.5;
+    font-size: 7.5px;
+    line-height: 1.35;
   }
   .check-list li::before {
     content: "\2713";
@@ -164,9 +149,9 @@
     counter-reset: actions;
   }
   .numbered-list li {
-    padding: 3px 0;
-    font-size: 9.5px;
-    line-height: 1.5;
+    padding: 2px 0;
+    font-size: 8.5px;
+    line-height: 1.4;
     counter-increment: actions;
   }
   .numbered-list li::before {
@@ -178,24 +163,23 @@
   /* ── CONFIDENCE FOOTER ── */
   .confidence-footer {
     border: 1.5px solid #ccc;
-    margin-bottom: 8px;
+    border-top: none;
+    margin-bottom: 6px;
   }
-  .confidence-footer .section-title {
-    font-size: 10.5px;
-  }
+  .confidence-footer .section-title { font-size: 10px; }
   .confidence-footer .section-body {
-    padding: 8px 12px;
-    font-size: 9.5px;
-    line-height: 1.55;
+    padding: 5px 10px;
+    font-size: 8.5px;
+    line-height: 1.4;
   }
 
   /* ── AUDIT STRIP ── */
   .audit-strip {
-    font-size: 7.5px;
+    font-size: 7px;
     color: #999;
     border-top: 1px solid #ddd;
-    padding-top: 4px;
-    margin-top: 4px;
+    padding-top: 3px;
+    margin-top: 2px;
   }
 </style>
 </head>
@@ -262,7 +246,7 @@
     <div class="section-title aiqe-blue">Recommended Testing / Validation</div>
     <div class="section-body">
       {% if actions_intro %}
-      <p style="font-size:9px; margin-bottom:6px;">{{ actions_intro }}</p>
+      <p style="font-size:8px; margin-bottom:4px;">{{ actions_intro }}</p>
       {% endif %}
       <ol class="numbered-list">
         {% for action in action_items %}
