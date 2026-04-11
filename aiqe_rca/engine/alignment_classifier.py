@@ -1,228 +1,258 @@
-"""Alignment classifier — classifies evidence-hypothesis relationships.
+"""Input-driven alignment classifier.
 
-For each (hypothesis, evidence) pair, determines:
-- Supporting: evidence is consistent with the hypothesis
-- Weakening: evidence softens confidence in the hypothesis without fully ruling it out
-- Contradicting: evidence directly conflicts with the hypothesis
-- Indeterminate: evidence is related but unclear
+Classifies each evidence-hypothesis pair into exactly one relationship tag:
+- supporting
+- weakening
+- contradictory
+- indeterminate
 
-Uses deterministic keyword, phrase, and template-specific pattern analysis.
+The classifier uses only the current hypothesis wording and current evidence
+text. No domain templates or persisted priors are consulted.
 """
+
+from __future__ import annotations
 
 import re
 
-import yaml
-
-from aiqe_rca.config import settings
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.evidence import EvidenceElement
 from aiqe_rca.models.hypothesis import Hypothesis
 
-SUPPORTING_INDICATORS = [
-    "consistent with",
+_SUPPORTING_PATTERNS = (
+    "failure",
+    "defect",
+    "issue",
+    "problem",
     "out of spec",
     "out of control",
-    "non-conformance",
-    "skipping",
-    "skipped",
-    "not followed",
-    "violation",
-    "exceeded",
-    "above limit",
-    "below limit",
-    "higher defect rate",
-    "higher failure rate",
-    "blistering",
-    "cracking",
-    "peeling",
-    "delamination",
-    "residue",
+    "variation",
+    "variable",
+    "drift",
+    "wear",
+    "worn",
+    "damage",
+    "damaged",
     "contamination",
-    "open container",
-    "expired",
+    "residue",
+    "skipped",
     "missing",
-    "absent",
-]
+    "abnormal",
+    "inconsistent",
+    "intermittent",
+    "high",
+    "higher",
+    "elevated",
+    "spike",
+    "drop",
+    "fallout",
+    "blister",
+    "crack",
+    "peel",
+    "delamination",
+    "chatter",
+    "vibration",
+    "correlation",
+    "linked",
+    "associated",
+)
 
-WEAKENING_INDICATORS = [
+_WEAKENING_PATTERNS = (
+    "possible",
+    "possibly",
+    "may",
+    "might",
+    "could",
+    "appears",
+    "suggests",
+    "limited",
+    "unclear",
+    "mixed",
+    "isolated",
+    "partial",
     "some lots passed",
     "adjacent lots",
-]
+)
 
-CONTRADICTING_INDICATORS = [
-    "verified",
-    "confirmed good",
-    "all lots passed",
-    "no defect",
+_CONTRADICTORY_PATTERNS = (
+    "no correlation",
+    "no clear correlation",
+    "no consistent shift",
+    "no shift",
+    "no recorded changes",
+    "no change",
     "no issue",
+    "no defect",
+    "no evidence",
+    "no abnormality",
+    "stable",
+    "in control",
+    "within limits",
     "normal",
     "acceptable",
-    "meets requirement",
-]
+    "passed",
+    "all lots passed",
+    "verified",
+    "confirmed",
+    "unchanged",
+    "consistent",
+)
 
-NEGATION_PREFIXES = [
-    "no ",
-    "not ",
-    "without ",
-    "never ",
-    "none ",
-    "neither ",
-]
-
-
-def _load_template_map() -> dict[str, dict]:
-    """Load template metadata for template-specific evidence patterns."""
-    templates_path = settings.rules_dir / "domain_templates.yaml"
-    with open(templates_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return {template["id"]: template for template in data.get("templates", [])}
-
-
-_TEMPLATE_MAP = _load_template_map()
+_NEGATION_PREFIXES = (
+    "no",
+    "not",
+    "without",
+    "never",
+    "none",
+)
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize whitespace for phrase matching."""
+    """Normalize whitespace and casing for deterministic text matching."""
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
-def _has_indicator(text: str, indicators: list[str]) -> tuple[int, list[str]]:
-    """Return count and the matched indicator phrases."""
-    text_lower = _normalize_text(text)
-    matches: list[str] = []
-    for indicator in indicators:
-        pattern = r"\b" + re.escape(_normalize_text(indicator)) + r"\b"
-        if re.search(pattern, text_lower):
-            matches.append(indicator)
-    return len(matches), matches
+def _tokenize(text: str) -> list[str]:
+    """Extract stable tokens from free text."""
+    return re.findall(r"[a-z0-9]+(?:[/-][a-z0-9]+)*", _normalize_text(text))
 
 
-def _check_negation_context(text: str, phrase: str) -> bool:
-    """Check if a phrase appears in a negated context."""
-    text_lower = _normalize_text(text)
-    phrase_lower = _normalize_text(phrase)
-    idx = text_lower.find(phrase_lower)
-    if idx < 0:
+def _split_statements(text: str) -> list[str]:
+    """Break evidence into coarse reasoning statements."""
+    normalized = text.replace("•", ". ").replace(";", ". ")
+    return [part.strip() for part in re.split(r"[.\n]+", normalized) if part.strip()]
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    """Return True when a phrase is present as a word-bounded match."""
+    if not phrase:
         return False
-    prefix_window = text_lower[max(0, idx - 20) : idx]
-    return any(neg in prefix_window for neg in NEGATION_PREFIXES)
+    return re.search(r"\b" + re.escape(_normalize_text(phrase)) + r"\b", _normalize_text(text)) is not None
 
 
-def _keyword_relevance(evidence_text: str, hypothesis_keywords: list[str]) -> int:
-    """Count how many hypothesis keywords appear in the evidence text."""
-    text_lower = evidence_text.lower()
-    count = 0
-    for kw in hypothesis_keywords:
-        kw_lower = kw.lower()
-        if re.search(r"\b" + re.escape(kw_lower) + r"\b", text_lower):
-            count += 1
-        elif len(kw_lower) >= 5 and kw_lower[:5] in text_lower:
-            count += 1
-    return count
+def _collect_hypothesis_terms(hypothesis: Hypothesis) -> list[str]:
+    """Build the current-input term set used to evaluate relevance."""
+    terms = set()
+    if hypothesis.process_step:
+        terms.add(_normalize_text(hypothesis.process_step))
+    for keyword in hypothesis.keywords:
+        normalized = _normalize_text(keyword)
+        if normalized:
+            terms.add(normalized)
+    ordered = sorted(terms, key=lambda item: (-len(item.split()), -len(item), item))
+    return ordered
 
 
-def _template_patterns(hypothesis: Hypothesis) -> tuple[list[str], list[str], list[str]]:
-    """Get template-specific support, weakening, and contradiction patterns."""
-    template = _TEMPLATE_MAP.get(hypothesis.template_id or "", {})
-    return (
-        template.get("support_indicators", []),
-        template.get("weakening_indicators", []),
-        template.get("contradicting_indicators", []),
-    )
+def _matched_terms(text: str, terms: list[str]) -> list[str]:
+    """Return hypothesis terms explicitly present in the evidence text."""
+    return [term for term in terms if _contains_phrase(text, term)]
+
+
+def _term_negated(statement: str, term: str) -> bool:
+    """Return True when the matched hypothesis term appears with a nearby negation."""
+    normalized_statement = _normalize_text(statement)
+    normalized_term = _normalize_text(term)
+    match = re.search(r"\b" + re.escape(normalized_term) + r"\b", normalized_statement)
+    if match is None:
+        return False
+    prefix = normalized_statement[max(0, match.start() - 24) : match.start()]
+    prefix_tokens = _tokenize(prefix)[-3:]
+    return any(token in _NEGATION_PREFIXES for token in prefix_tokens)
+
+
+def _count_pattern_hits(text: str, patterns: tuple[str, ...]) -> list[str]:
+    """Return all matched pattern phrases in deterministic order."""
+    matches = [pattern for pattern in patterns if _contains_phrase(text, pattern)]
+    return sorted(set(matches))
+
+
+def _score_statement(statement: str, hypothesis_terms: list[str]) -> tuple[int, int, int, list[str]]:
+    """Score one evidence statement against one hypothesis.
+
+    Returns:
+        supporting_score, weakening_score, contradictory_score, matched_phrases
+    """
+    term_hits = _matched_terms(statement, hypothesis_terms)
+    if not term_hits:
+        return 0, 0, 0, []
+
+    supporting_hits = _count_pattern_hits(statement, _SUPPORTING_PATTERNS)
+    weakening_hits = _count_pattern_hits(statement, _WEAKENING_PATTERNS)
+    contradictory_hits = _count_pattern_hits(statement, _CONTRADICTORY_PATTERNS)
+    negated_terms = [term for term in term_hits if _term_negated(statement, term)]
+
+    supporting_score = len(supporting_hits)
+    weakening_score = len(weakening_hits)
+    contradictory_score = len(contradictory_hits) + len(negated_terms)
+
+    # If the statement directly names the hypothesis signal and also references the
+    # problem/failure state, treat it as supportive even without a canned pattern.
+    if term_hits and supporting_score == 0:
+        statement_tokens = set(_tokenize(statement))
+        if statement_tokens.intersection({"failure", "defect", "issue", "problem", "variation", "fallout"}):
+            supporting_score += 1
+
+    matched_phrases = sorted(set(term_hits + supporting_hits + weakening_hits + contradictory_hits + negated_terms))
+    return supporting_score, weakening_score, contradictory_score, matched_phrases
 
 
 def _format_rationale(label: AlignmentLabel, phrases: list[str]) -> str:
-    """Build a concise rationale for the assigned relationship label."""
-    joined = ", ".join(sorted(set(phrases[:3]))) if phrases else "related evidence"
+    """Build a concise explanation for the assigned relationship."""
+    details = ", ".join(phrases[:4]) if phrases else "current evidence wording"
     if label == AlignmentLabel.SUPPORTING:
-        return f"Evidence supports this hypothesis via: {joined}."
+        return f"Evidence supports this hypothesis through: {details}."
     if label == AlignmentLabel.WEAKENING:
-        return f"Evidence weakens this hypothesis via: {joined}."
+        return f"Evidence weakens this hypothesis through: {details}."
     if label == AlignmentLabel.CONTRADICTING:
-        return f"Evidence contradicts this hypothesis via: {joined}."
-    return "Evidence is related but contains mixed or unclear signals."
+        return f"Evidence contradicts this hypothesis through: {details}."
+    return "Evidence mentions related context but does not clearly support or refute this hypothesis."
 
 
 def classify_alignment(
     hypothesis: Hypothesis,
     evidence: EvidenceElement,
 ) -> AlignmentResult:
-    """Classify the relationship between a hypothesis and an evidence element."""
-    text = evidence.text_content
+    """Classify the evidence-to-hypothesis relationship for one pair."""
+    evidence_text = evidence.text_content
+    hypothesis_terms = _collect_hypothesis_terms(hypothesis)
+    statements = _split_statements(evidence_text)
 
-    relevance = _keyword_relevance(text, hypothesis.keywords)
-    support_patterns, weakening_patterns, contradiction_patterns = _template_patterns(
-        hypothesis
-    )
+    total_supporting = 0
+    total_weakening = 0
+    total_contradictory = 0
+    matched_phrases: list[str] = []
 
-    pattern_relevance = sum(
-        1
-        for phrase in support_patterns + weakening_patterns + contradiction_patterns
-        if re.search(r"\b" + re.escape(_normalize_text(phrase)) + r"\b", _normalize_text(text))
-    )
-    if relevance == 0 and pattern_relevance == 0:
-        return AlignmentResult(
-            hypothesis_id=hypothesis.id,
-            evidence_id=evidence.id,
-            classification=AlignmentLabel.INDETERMINATE,
-            rationale="Evidence does not contain hypothesis-specific cues.",
+    for statement in statements:
+        supporting_score, weakening_score, contradictory_score, phrases = _score_statement(
+            statement,
+            hypothesis_terms,
         )
+        total_supporting += supporting_score
+        total_weakening += weakening_score
+        total_contradictory += contradictory_score
+        matched_phrases.extend(phrases)
 
-    generic_support_count, generic_support_matches = _has_indicator(text, SUPPORTING_INDICATORS)
-    template_support_count, template_support_matches = _has_indicator(text, support_patterns)
-    support_count = generic_support_count + template_support_count
-    support_matches = generic_support_matches + template_support_matches
-    weakening_count, weakening_matches = _has_indicator(
-        text, WEAKENING_INDICATORS + weakening_patterns
-    )
-    contradiction_count, contradiction_matches = _has_indicator(
-        text, CONTRADICTING_INDICATORS + contradiction_patterns
-    )
-
-    # Negated support phrases become weakening signals.
-    for phrase in list(support_matches):
-        if _check_negation_context(text, phrase):
-            support_count -= 1
-            weakening_count += 1
-            weakening_matches.append(f"negated {phrase}")
-
-    if contradiction_count > 0 and support_count == 0:
-        label = AlignmentLabel.CONTRADICTING
-        rationale_matches = contradiction_matches
-    elif weakening_count > 0 and support_count == 0 and contradiction_count == 0:
-        label = AlignmentLabel.WEAKENING
-        rationale_matches = weakening_matches
-    elif support_count > 0 and contradiction_count == 0 and weakening_count == 0:
-        label = AlignmentLabel.SUPPORTING
-        rationale_matches = support_matches
-    elif support_count > 0 and (weakening_count > 0 or contradiction_count > 0):
-        if template_support_count > 0 and template_support_count >= (weakening_count + contradiction_count):
-            label = AlignmentLabel.SUPPORTING
-            rationale_matches = support_matches + weakening_matches + contradiction_matches
-        elif weakening_count >= support_count and template_support_count == 0:
-            label = AlignmentLabel.WEAKENING
-            rationale_matches = weakening_matches + support_matches
-        elif contradiction_count > support_count:
-            label = AlignmentLabel.CONTRADICTING
-            rationale_matches = contradiction_matches + support_matches
-        elif weakening_count > support_count:
-            label = AlignmentLabel.WEAKENING
-            rationale_matches = weakening_matches + support_matches
-        else:
-            label = AlignmentLabel.INDETERMINATE
-            rationale_matches = support_matches + weakening_matches + contradiction_matches
-    elif weakening_count > 0 and contradiction_count > 0:
+    if not matched_phrases:
         label = AlignmentLabel.INDETERMINATE
-        rationale_matches = weakening_matches + contradiction_matches
+    elif total_contradictory > max(total_supporting, total_weakening):
+        label = AlignmentLabel.CONTRADICTING
+    elif total_supporting > max(total_weakening, total_contradictory):
+        label = AlignmentLabel.SUPPORTING
+    elif total_weakening > max(total_supporting, total_contradictory):
+        label = AlignmentLabel.WEAKENING
+    elif total_contradictory > 0:
+        label = AlignmentLabel.CONTRADICTING
+    elif total_weakening > 0:
+        label = AlignmentLabel.WEAKENING
+    elif total_supporting > 0:
+        label = AlignmentLabel.SUPPORTING
     else:
         label = AlignmentLabel.INDETERMINATE
-        rationale_matches = []
 
     return AlignmentResult(
         hypothesis_id=hypothesis.id,
         evidence_id=evidence.id,
         classification=label,
-        rationale=_format_rationale(label, rationale_matches),
+        rationale=_format_rationale(label, sorted(set(matched_phrases))),
     )
 
 
@@ -230,9 +260,9 @@ def classify_all_alignments(
     hypotheses: list[Hypothesis],
     evidence_elements: list[EvidenceElement],
 ) -> list[AlignmentResult]:
-    """Classify alignment for all associated (hypothesis, evidence) pairs."""
+    """Classify all associated evidence-hypothesis pairs."""
+    evidence_map = {evidence.id: evidence for evidence in evidence_elements}
     results: list[AlignmentResult] = []
-    evidence_map = {e.id: e for e in evidence_elements}
 
     for hypothesis in hypotheses:
         for evidence_id in hypothesis.associated_evidence_ids:

@@ -1,0 +1,24 @@
+{
+  "input_hash": "db43015d79056d7b3ca7311769025a6ddeb0ef1e0798aa0466b74e0a7829d796",
+  "timestamp": "2026-04-11T17:47:14.593399+00:00",
+  "trace_map": [
+    {
+      "source_file": "observations_01.txt",
+      "evidence_ids": [
+        "E-a986ba4f-5258-5fad-9ba6-4183356c2e39"
+      ],
+      "report_references": []
+    },
+    {
+      "source_file": "observations_02.txt",
+      "evidence_ids": [
+        "E-48e53e3a-bff9-5662-9c89-2d57199874cb"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "observations_01.txt",
+    "observations_02.txt"
+  ]
+}

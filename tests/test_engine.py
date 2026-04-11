@@ -1,4 +1,6 @@
-"""Tests for the core deterministic engine."""
+"""Tests for the deterministic, input-driven RCA engine."""
+
+from __future__ import annotations
 
 import pytest
 
@@ -15,173 +17,181 @@ from aiqe_rca.models.hypothesis import Hypothesis, RankLabel
 from aiqe_rca.models.report import ConfidenceLevel
 
 
-def _make_evidence(eid: str, text: str) -> EvidenceElement:
+def _make_evidence(eid: str, text: str, source: str = "test_doc.txt") -> EvidenceElement:
     return EvidenceElement(
         id=eid,
-        source="test_doc.pdf",
-        source_type=SourceType.PDF,
+        source=source,
+        source_type=SourceType.TXT,
         text_content=text,
     )
 
 
-# --- Hypothesis Builder Tests ---
+def _make_hypothesis(hid: str, process_step: str, keywords: list[str]) -> Hypothesis:
+    return Hypothesis(
+        id=hid,
+        description=f"Current input repeatedly references {process_step}.",
+        process_step=process_step,
+        keywords=keywords,
+    )
+
 
 def test_hypothesis_builder_returns_2_to_4():
-    problem = "Intermittent bond failures with blistering near edges on Line 2"
+    problem = "Intermittent chatter marks with coolant flow variation and stable spindle speed."
     evidence = [
-        _make_evidence("E1", "SPC data shows cure temperature is in control"),
-        _make_evidence("E2", "Operators skipping manual wipe step on busy shifts"),
-        _make_evidence("E3", "Adhesive containers found open past exposure time"),
+        _make_evidence("E1", "Coolant flow was inconsistent across failing lots."),
+        _make_evidence("E2", "Chatter marks increased during low-flow periods."),
+        _make_evidence("E3", "Spindle speed remained within limits."),
     ]
+
     hypotheses = build_hypotheses(problem, evidence)
+
     assert 2 <= len(hypotheses) <= 4
+    assert all(h.template_id is None for h in hypotheses)
+    assert any("coolant" in (h.process_step or "") for h in hypotheses)
 
 
 def test_hypothesis_builder_deterministic():
-    problem = "Bond failures with surface contamination and blistering"
-    evidence = [
-        _make_evidence("E1", "Surface cleaning not performed consistently"),
-    ]
+    problem = "Coolant flow variation and chatter marks on shafts."
+    evidence = [_make_evidence("E1", "Coolant flow was inconsistent during the event.")]
+
     runs = [build_hypotheses(problem, evidence) for _ in range(3)]
-    ids = [[h.id for h in run] for run in runs]
-    assert all(i == ids[0] for i in ids)
+    labels = [[(h.id, h.process_step) for h in run] for run in runs]
+
+    assert all(run == labels[0] for run in labels)
 
 
-def test_hypothesis_builder_matches_surface_template():
-    problem = "Surface contamination before bonding causing adhesion failure"
-    evidence = [
-        _make_evidence("E1", "Residue found on parts after cleaning step"),
-    ]
+def test_hypothesis_builder_uses_current_input_terms_only():
+    problem = "Tool wear and chatter marks were observed."
+    evidence = [_make_evidence("E1", "Coolant flow was steady but tool wear was visible.")]
+
     hypotheses = build_hypotheses(problem, evidence)
-    template_ids = [h.template_id for h in hypotheses]
-    assert "TMPL_SURFACE_PREP" in template_ids
+    current_input = f"{problem} {' '.join(item.text_content for item in evidence)}".lower()
 
+    for hypothesis in hypotheses:
+        tokens = (hypothesis.process_step or "").split()
+        assert tokens
+        assert all(token in current_input for token in tokens)
 
-# --- Alignment Classifier Tests ---
 
 def test_classify_supporting():
-    h = Hypothesis(
-        id="H1",
-        description="Surface contamination",
-        keywords=["contamination", "cleaning", "residue"],
+    hypothesis = _make_hypothesis(
+        "H1",
+        "coolant flow",
+        ["coolant", "flow", "coolant flow"],
     )
-    e = _make_evidence("E1", "Visible residue detected on parts before bonding")
-    result = classify_alignment(h, e)
+    evidence = _make_evidence("E1", "Coolant flow was inconsistent during failing lots.")
+
+    result = classify_alignment(hypothesis, evidence)
+
     assert result.classification == AlignmentLabel.SUPPORTING
 
 
 def test_classify_contradicting():
-    h = Hypothesis(
-        id="H1",
-        description="Surface contamination",
-        keywords=["contamination", "cleaning", "residue"],
+    hypothesis = _make_hypothesis(
+        "H1",
+        "spindle speed",
+        ["spindle", "speed", "spindle speed"],
     )
-    e = _make_evidence("E2", "All lots passed cleanliness inspection within limits")
-    result = classify_alignment(h, e)
-    assert result.classification == AlignmentLabel.CONTRADICTING
+    evidence = _make_evidence("E2", "Spindle speed remained within limits with no recorded changes.")
 
+    result = classify_alignment(hypothesis, evidence)
 
-def test_classify_contradicting_process_false_lead():
-    h = Hypothesis(
-        id="H1",
-        description="Process parameter variation",
-        template_id="TMPL_PROCESS_PARAM",
-        keywords=["cure", "temperature", "cure time", "cure temperature", "stable process parameters"],
-    )
-    e = _make_evidence("E2", "SPC data for cure temperature and cure time remain in control with no process shifts detected")
-    result = classify_alignment(h, e)
     assert result.classification == AlignmentLabel.CONTRADICTING
 
 
 def test_classify_weakening():
-    h = Hypothesis(
-        id="H1",
-        description="Equipment variation",
-        template_id="TMPL_EQUIPMENT_CONDITION",
-        keywords=["press", "cavity", "equipment"],
+    hypothesis = _make_hypothesis(
+        "H1",
+        "tool wear",
+        ["tool", "wear", "tool wear"],
     )
-    e = _make_evidence("E2", "Some lots passed with no defects while adjacent lots in time sequence showed intermittent fallout")
-    result = classify_alignment(h, e)
+    evidence = _make_evidence("E3", "Tool wear is possible, but current evidence is limited and unclear.")
+
+    result = classify_alignment(hypothesis, evidence)
+
     assert result.classification == AlignmentLabel.WEAKENING
 
 
-def test_classify_indeterminate_no_keywords():
-    h = Hypothesis(
-        id="H1",
-        description="Surface contamination",
-        keywords=["contamination", "cleaning", "residue"],
+def test_classify_indeterminate_no_matching_terms():
+    hypothesis = _make_hypothesis(
+        "H1",
+        "coolant flow",
+        ["coolant", "flow", "coolant flow"],
     )
-    e = _make_evidence("E3", "Oven temperature was recorded at 180 degrees")
-    result = classify_alignment(h, e)
+    evidence = _make_evidence("E4", "Operator training records were reviewed last month.")
+
+    result = classify_alignment(hypothesis, evidence)
+
     assert result.classification == AlignmentLabel.INDETERMINATE
 
 
-# --- Ranker Tests ---
-
-def test_ranker_assigns_labels():
-    h1 = Hypothesis(id="H1", description="Hypothesis A", keywords=[])
-    h2 = Hypothesis(id="H2", description="Hypothesis B", keywords=[])
-    h3 = Hypothesis(id="H3", description="Hypothesis C", keywords=[])
+def test_ranker_assigns_primary_secondary_and_deprioritized():
+    h1 = _make_hypothesis("H1", "coolant flow", ["coolant", "flow"])
+    h2 = _make_hypothesis("H2", "chatter marks", ["chatter", "marks"])
+    h3 = _make_hypothesis("H3", "spindle speed", ["spindle", "speed"])
 
     alignments = [
         AlignmentResult(hypothesis_id="H1", evidence_id="E1", classification=AlignmentLabel.SUPPORTING, rationale="test"),
         AlignmentResult(hypothesis_id="H1", evidence_id="E2", classification=AlignmentLabel.SUPPORTING, rationale="test"),
         AlignmentResult(hypothesis_id="H2", evidence_id="E3", classification=AlignmentLabel.SUPPORTING, rationale="test"),
-        AlignmentResult(hypothesis_id="H2", evidence_id="E4", classification=AlignmentLabel.CONTRADICTING, rationale="test"),
-        AlignmentResult(hypothesis_id="H3", evidence_id="E5", classification=AlignmentLabel.INDETERMINATE, rationale="test"),
+        AlignmentResult(hypothesis_id="H3", evidence_id="E4", classification=AlignmentLabel.CONTRADICTING, rationale="test"),
     ]
 
     ranked = rank_hypotheses([h1, h2, h3], alignments, [])
+
     assert ranked[0].rank_label == RankLabel.PRIMARY
-    assert ranked[0].id == "H1"  # Highest net support
+    assert ranked[0].id == "H1"
     assert ranked[1].rank_label == RankLabel.SECONDARY
-    assert ranked[2].rank_label == RankLabel.CONDITIONAL_AMPLIFIER
+    assert ranked[2].rank_label == RankLabel.DEPRIORITIZED
 
 
-def test_ranker_deterministic():
-    h1 = Hypothesis(id="H1", description="A", keywords=[])
-    h2 = Hypothesis(id="H2", description="B", keywords=[])
+def test_ranker_prevents_contradicted_primary_when_non_contradicted_exists():
+    h1 = _make_hypothesis("H1", "spindle speed", ["spindle", "speed"])
+    h2 = _make_hypothesis("H2", "coolant flow", ["coolant", "flow"])
+
     alignments = [
-        AlignmentResult(hypothesis_id="H1", evidence_id="E1", classification=AlignmentLabel.SUPPORTING, rationale="t"),
+        AlignmentResult(hypothesis_id="H1", evidence_id="E1", classification=AlignmentLabel.CONTRADICTING, rationale="test"),
+        AlignmentResult(hypothesis_id="H2", evidence_id="E2", classification=AlignmentLabel.SUPPORTING, rationale="test"),
     ]
-    for _ in range(5):
-        result = rank_hypotheses([h1.model_copy(), h2.model_copy()], alignments, [])
-        assert result[0].id == "H1"
 
+    ranked = rank_hypotheses([h1, h2], alignments, [])
 
-# --- Confidence Tests ---
+    assert ranked[0].id == "H2"
+    assert ranked[0].rank_label == RankLabel.PRIMARY
+
 
 def test_confidence_low_when_no_evidence():
     assert assess_confidence([], [], []) == ConfidenceLevel.LOW
 
 
-def test_confidence_with_gaps_reduces():
-    h1 = Hypothesis(id="H1", description="Test", keywords=[], rank_label=RankLabel.PRIMARY, net_support=2)
+def test_confidence_medium_when_primary_supported_but_gaps_present():
+    hypothesis = _make_hypothesis("H1", "coolant flow", ["coolant", "flow"])
+    hypothesis.rank_label = RankLabel.PRIMARY
     alignments = [
-        AlignmentResult(hypothesis_id="H1", evidence_id="E1", classification=AlignmentLabel.SUPPORTING, rationale="t"),
-        AlignmentResult(hypothesis_id="H1", evidence_id="E2", classification=AlignmentLabel.SUPPORTING, rationale="t"),
+        AlignmentResult(hypothesis_id="H1", evidence_id="E1", classification=AlignmentLabel.SUPPORTING, rationale="test"),
+        AlignmentResult(hypothesis_id="H1", evidence_id="E2", classification=AlignmentLabel.SUPPORTING, rationale="test"),
     ]
     gaps = [
-        DataGap(category=EvidenceCategory.DESIGN_REQUIREMENTS, description="No DFMEA", severity=GapSeverity.CRITICAL, affects_hypotheses=["H1"]),
-        DataGap(category=EvidenceCategory.PROCESS_CONTROL, description="No control plan", severity=GapSeverity.CRITICAL, affects_hypotheses=["H1"]),
-        DataGap(category=EvidenceCategory.PERFORMANCE_VARIATION, description="No SPC", severity=GapSeverity.CRITICAL, affects_hypotheses=["H1"]),
+        DataGap(
+            category=EvidenceCategory.UNCATEGORIZED,
+            description="Quantitative confirmation for 'coolant flow' is missing.",
+            severity=GapSeverity.MODERATE,
+            affects_hypotheses=["H1"],
+        )
     ]
-    result = assess_confidence([h1], alignments, gaps)
-    # With 3 critical gaps, confidence should be reduced
-    assert result in (ConfidenceLevel.LOW, ConfidenceLevel.MEDIUM)
+
+    assert assess_confidence([hypothesis], alignments, gaps) == ConfidenceLevel.MEDIUM
 
 
 def test_associate_evidence_falls_back_without_embeddings(monkeypatch):
-    hypothesis = Hypothesis(
-        id="H1",
-        description="Surface contamination before bonding",
-        template_id="TMPL_SURFACE_PREP",
-        process_step="Upstream Surface / Adhesive Condition Variation",
-        keywords=["surface", "contamination", "manual wipe", "adhesive"],
+    hypothesis = _make_hypothesis(
+        "H1",
+        "coolant flow",
+        ["coolant", "flow", "coolant flow"],
     )
     evidence = _make_evidence(
         "E1",
-        "Operators were observed skipping the manual wipe step before adhesive bonding.",
+        "Coolant flow was inconsistent during the defect event.",
     )
 
     monkeypatch.setattr(
@@ -193,15 +203,42 @@ def test_associate_evidence_falls_back_without_embeddings(monkeypatch):
     assert updated[0].associated_evidence_ids == ["E1"]
 
 
-# --- Gap Detector Tests ---
-
-def test_gap_detector_finds_missing_categories():
-    # Evidence that only covers detection/audit
-    evidence = [
-        _make_evidence("E1", "Audit report shows inspection findings and non-conformance detected"),
+def test_gap_detector_flags_missing_direct_support_and_cross_source_confirmation():
+    hypothesis = _make_hypothesis("H1", "spindle speed", ["spindle", "speed"])
+    hypothesis.associated_evidence_ids = ["E1"]
+    evidence = [_make_evidence("E1", "Spindle speed remained within limits.", source="one_source.txt")]
+    alignments = [
+        AlignmentResult(
+            hypothesis_id="H1",
+            evidence_id="E1",
+            classification=AlignmentLabel.CONTRADICTING,
+            rationale="test",
+        )
     ]
-    gaps = detect_gaps(evidence)
-    # Should find gaps in categories with no coverage
-    gap_categories = [g.category for g in gaps]
-    # At minimum, RC (Response/Corrective) should be flagged as missing
-    assert any(g.severity == GapSeverity.CRITICAL for g in gaps)
+
+    gaps = detect_gaps(evidence, [hypothesis], alignments)
+    descriptions = [gap.description for gap in gaps]
+
+    assert any("No direct supporting evidence confirms" in description for description in descriptions)
+    assert any("Cross-source corroboration" in description for description in descriptions)
+
+
+def test_gap_detector_adds_global_single_source_gap():
+    evidence = [_make_evidence("E1", "Coolant flow was inconsistent.", source="one_source.txt")]
+    hypothesis = _make_hypothesis("H1", "coolant flow", ["coolant", "flow"])
+    hypothesis.associated_evidence_ids = ["E1"]
+    alignments = [
+        AlignmentResult(
+            hypothesis_id="H1",
+            evidence_id="E1",
+            classification=AlignmentLabel.SUPPORTING,
+            rationale="test",
+        )
+    ]
+
+    gaps = detect_gaps(evidence, [hypothesis], alignments)
+
+    assert any(
+        gap.description == "Cross-source corroboration is limited because the current input package contains only one source."
+        for gap in gaps
+    )

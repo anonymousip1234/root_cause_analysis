@@ -1,12 +1,15 @@
 """FastAPI application entry point for the AIQE RCA Engine."""
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from aiqe_rca.api.routes import router
 from aiqe_rca.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -15,7 +18,10 @@ async def lifespan(app: FastAPI):
     # Preload embedding model so first request isn't slow
     from aiqe_rca.engine.evidence_associator import EmbeddingModel
 
-    EmbeddingModel.get_model()
+    try:
+        EmbeddingModel.get_model()
+    except Exception:
+        logger.warning("Embedding model preload failed; lexical fallback will be used.", exc_info=True)
 
     # Ensure reports directory exists
     settings.reports_dir.mkdir(parents=True, exist_ok=True)

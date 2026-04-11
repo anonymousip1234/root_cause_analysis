@@ -1,248 +1,193 @@
-"""Data gap detection engine.
+"""Input-driven data gap detection.
 
-Checks uploaded evidence against a 5-category evidence schema to identify
-what is missing or incomplete. Missing artifacts are diagnostic signals, not errors.
+Gaps are derived from the current evidence package and the current candidate
+hypotheses only. No domain templates or prior-run expectations are used.
 """
+
+from __future__ import annotations
 
 import re
 
-import yaml
-
-from aiqe_rca.config import settings
+from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.evidence import EvidenceCategory, EvidenceElement
 from aiqe_rca.models.gaps import DataGap, GapSeverity
 from aiqe_rca.models.hypothesis import Hypothesis
 
-# Mapping from schema category keys to EvidenceCategory enum
-_CATEGORY_MAP = {
-    "DR": EvidenceCategory.DESIGN_REQUIREMENTS,
-    "PC": EvidenceCategory.PROCESS_CONTROL,
-    "PV": EvidenceCategory.PERFORMANCE_VARIATION,
-    "DA": EvidenceCategory.DETECTION_AUDIT,
-    "RC": EvidenceCategory.RESPONSE_CORRECTIVE,
-}
+_QUANT_PATTERNS = (
+    "%",
+    "ppm",
+    "cpk",
+    "sigma",
+    "trend",
+    "chart",
+    "spc",
+    "sample",
+    "count",
+    "rate",
+    "within limits",
+)
+
+_COMPARISON_PATTERNS = (
+    "pass",
+    "fail",
+    "passing",
+    "failing",
+    "before",
+    "after",
+    "versus",
+    "compared",
+    "shift",
+    "lot",
+    "batch",
+    "press",
+    "tool",
+)
 
 
-def _load_evidence_schema() -> dict:
-    """Load the evidence category schema from YAML."""
-    schema_path = settings.rules_dir / "evidence_schema.yaml"
-    with open(schema_path) as f:
-        data = yaml.safe_load(f)
-    return data.get("categories", {})
+def _normalize_text(text: str) -> str:
+    """Normalize free text for deterministic matching."""
+    return re.sub(r"\s+", " ", text.lower()).strip()
 
 
-def _check_category_coverage(
-    category_key: str,
-    category_config: dict,
-    evidence_elements: list[EvidenceElement],
-) -> tuple[bool, bool, int]:
-    """Check if evidence elements cover a given category.
+def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
+    """Return True if any pattern appears in the text."""
+    normalized = _normalize_text(text)
+    for pattern in patterns:
+        if pattern in {"%"}:
+            if pattern in normalized:
+                return True
+            continue
+        if re.search(r"\b" + re.escape(pattern) + r"\b", normalized):
+            return True
+    return False
 
-    Returns:
-        (has_any_coverage, is_partial, indicator_hit_count)
-    """
-    indicators = category_config.get("expected_indicators", [])
-    if not indicators:
-        return False, False, 0
 
-    # Combine all evidence text
-    all_text = " ".join(e.text_content.lower() for e in evidence_elements)
+def _dominant_category(evidence: list[EvidenceElement]) -> EvidenceCategory:
+    """Return the most common evidence category for a hypothesis."""
+    if not evidence:
+        return EvidenceCategory.UNCATEGORIZED
 
-    hit_count = 0
-    for indicator in indicators:
-        if re.search(r"\b" + re.escape(indicator.lower()) + r"\b", all_text):
-            hit_count += 1
+    counts: dict[EvidenceCategory, int] = {}
+    for item in evidence:
+        counts[item.category] = counts.get(item.category, 0) + 1
 
-    total = len(indicators)
-    if hit_count == 0:
-        return False, False, 0
-    elif hit_count < total * 0.3:
-        return True, True, hit_count  # Partial coverage
-    else:
-        return True, False, hit_count  # Adequate coverage
+    return sorted(
+        counts.items(),
+        key=lambda item: (-item[1], item[0].value),
+    )[0][0]
+
+
+def _add_gap(
+    gaps: list[DataGap],
+    category: EvidenceCategory,
+    description: str,
+    severity: GapSeverity,
+    affects_hypotheses: list[str],
+) -> None:
+    """Append a unique gap only once."""
+    if any(
+        gap.description == description and gap.affects_hypotheses == affects_hypotheses
+        for gap in gaps
+    ):
+        return
+    gaps.append(
+        DataGap(
+            category=category,
+            description=description,
+            severity=severity,
+            affects_hypotheses=affects_hypotheses,
+        )
+    )
 
 
 def detect_gaps(
     evidence_elements: list[EvidenceElement],
     hypotheses: list[Hypothesis] | None = None,
+    alignments: list[AlignmentResult] | None = None,
 ) -> list[DataGap]:
-    """Detect data gaps by checking evidence against the 5-category schema.
-
-    For each category:
-    - If entirely missing → CRITICAL gap
-    - If present but incomplete → MODERATE gap
-    - If adequately covered → no gap
-
-    Also identifies which hypotheses are affected by each gap.
-
-    Args:
-        evidence_elements: All parsed evidence elements.
-        hypotheses: Optional hypotheses to determine which are affected.
-
-    Returns:
-        List of DataGap objects.
-    """
-    schema = _load_evidence_schema()
+    """Detect confidence-limiting gaps from the current input package."""
     gaps: list[DataGap] = []
+    hypotheses = hypotheses or []
+    alignments = alignments or []
 
-    for cat_key, cat_config in sorted(schema.items()):
-        category_enum = _CATEGORY_MAP.get(cat_key, EvidenceCategory.UNCATEGORIZED)
-        has_coverage, is_partial, hit_count = _check_category_coverage(
-            cat_key, cat_config, evidence_elements
+    all_hypothesis_ids = [hypothesis.id for hypothesis in hypotheses]
+    source_count = len({evidence.source for evidence in evidence_elements})
+    if evidence_elements and source_count <= 1 and all_hypothesis_ids:
+        _add_gap(
+            gaps,
+            EvidenceCategory.UNCATEGORIZED,
+            "Cross-source corroboration is limited because the current input package contains only one source.",
+            GapSeverity.MODERATE,
+            all_hypothesis_ids,
         )
 
-        if not has_coverage:
-            # Entire category missing
-            affected = _find_affected_hypotheses(cat_key, hypotheses)
-            gaps.append(
-                DataGap(
-                    category=category_enum,
-                    description=(
-                        f"No {cat_config['name']} evidence found. "
-                        f"Expected documents: {', '.join(cat_config.get('expected_document_types', []))}"
-                    ),
-                    severity=GapSeverity.CRITICAL,
-                    affects_hypotheses=affected,
-                )
+    alignment_map: dict[str, list[AlignmentResult]] = {}
+    for alignment in alignments:
+        alignment_map.setdefault(alignment.hypothesis_id, []).append(alignment)
+
+    evidence_map = {evidence.id: evidence for evidence in evidence_elements}
+
+    for hypothesis in hypotheses:
+        associated_evidence = [
+            evidence_map[evidence_id]
+            for evidence_id in hypothesis.associated_evidence_ids
+            if evidence_id in evidence_map
+        ]
+        affected = [hypothesis.id]
+        category = _dominant_category(associated_evidence)
+        process_name = hypothesis.process_step or hypothesis.id
+
+        if not associated_evidence:
+            _add_gap(
+                gaps,
+                EvidenceCategory.UNCATEGORIZED,
+                f"No extracted evidence was associated with '{process_name}'.",
+                GapSeverity.CRITICAL,
+                affected,
             )
-        elif is_partial:
-            # Category present but incomplete
-            affected = _find_affected_hypotheses(cat_key, hypotheses)
-            gaps.append(
-                DataGap(
-                    category=category_enum,
-                    description=(
-                        f"{cat_config['name']} evidence is present but incomplete. "
-                        f"Only {hit_count} of {len(cat_config.get('expected_indicators', []))} "
-                        f"expected indicators found."
-                    ),
-                    severity=GapSeverity.MODERATE,
-                    affects_hypotheses=affected,
-                )
+            continue
+
+        supporting_count = sum(
+            1
+            for alignment in alignment_map.get(hypothesis.id, [])
+            if alignment.classification == AlignmentLabel.SUPPORTING
+        )
+
+        distinct_sources = sorted({evidence.source for evidence in associated_evidence})
+        if supporting_count == 0:
+            _add_gap(
+                gaps,
+                category,
+                f"No direct supporting evidence confirms '{process_name}'; the current signal remains indirect.",
+                GapSeverity.CRITICAL,
+                affected,
             )
 
-    gaps.extend(_detect_contextual_gaps(evidence_elements, hypotheses))
+        if len(distinct_sources) == 1:
+            _add_gap(
+                gaps,
+                category,
+                f"Cross-source corroboration for '{process_name}' is limited to a single source.",
+                GapSeverity.MODERATE,
+                affected,
+            )
+
+        if not any(_contains_any(evidence.text_content, _QUANT_PATTERNS) for evidence in associated_evidence):
+            _add_gap(
+                gaps,
+                category,
+                f"Quantitative or measured confirmation for '{process_name}' is missing from the current input.",
+                GapSeverity.MODERATE,
+                affected,
+            )
+
+        if not any(_contains_any(evidence.text_content, _COMPARISON_PATTERNS) for evidence in associated_evidence):
+            _add_gap(
+                gaps,
+                category,
+                f"Pass/fail or condition-to-condition comparison for '{process_name}' is not explicit in the current input.",
+                GapSeverity.MINOR,
+                affected,
+            )
 
     return gaps
-
-
-def _find_affected_hypotheses(
-    category_key: str, hypotheses: list[Hypothesis] | None
-) -> list[str]:
-    """Find which hypotheses are affected by a gap in a given category.
-
-    Uses the domain template's typical_evidence_categories field.
-    """
-    if not hypotheses:
-        return []
-
-    # Load templates to check which templates depend on this category
-    templates_path = settings.rules_dir / "domain_templates.yaml"
-    with open(templates_path) as f:
-        data = yaml.safe_load(f)
-    templates = {t["id"]: t for t in data.get("templates", [])}
-
-    affected: list[str] = []
-    for h in hypotheses:
-        if h.template_id and h.template_id in templates:
-            tmpl = templates[h.template_id]
-            if category_key in tmpl.get("typical_evidence_categories", []):
-                affected.append(h.id)
-
-    return affected
-
-
-def _detect_contextual_gaps(
-    evidence_elements: list[EvidenceElement],
-    hypotheses: list[Hypothesis] | None,
-) -> list[DataGap]:
-    """Add context-specific gaps that materially limit confidence in ranked causes."""
-    if not evidence_elements:
-        return []
-
-    all_text = " ".join(e.text_content.lower() for e in evidence_elements)
-    detected: list[DataGap] = []
-
-    def _affected_for_templates(template_ids: set[str]) -> list[str]:
-        if not hypotheses:
-            return []
-        return [
-            h.id
-            for h in hypotheses
-            if h.template_id in template_ids
-        ]
-
-    if "adhesive" in all_text and (
-        "left open past exposure time" in all_text
-        or "open container" in all_text
-        or "open past recommended exposure time" in all_text
-        or "open on the production floor beyond the 4-hour exposure limit" in all_text
-        or "open beyond the 4-hour exposure limit" in all_text
-    ):
-        detected.append(
-            DataGap(
-                category=EvidenceCategory.PROCESS_CONTROL,
-                description=(
-                    "Adhesive handling variability is referenced, but lot-by-lot exposure time "
-                    "or open-container duration is not directly logged."
-                ),
-                severity=GapSeverity.MODERATE,
-                affects_hypotheses=_affected_for_templates(
-                    {"TMPL_SURFACE_PREP", "TMPL_MATERIAL_HANDLING"}
-                ),
-            )
-        )
-
-    if (
-        "stored longer than 48 hours" in all_text
-        or "staged near open dock doors" in all_text
-        or "wip time limit posted" in all_text
-        or "no electronic tracking" in all_text
-    ):
-        detected.append(
-            DataGap(
-                category=EvidenceCategory.PROCESS_CONTROL,
-                description=(
-                    "Storage / staging conditions appear relevant, but there is no direct lot-level "
-                    "tracking of dwell time or location before molding."
-                ),
-                severity=GapSeverity.MODERATE,
-                affects_hypotheses=_affected_for_templates({"TMPL_MATERIAL_HANDLING"}),
-            )
-        )
-
-    if "dock doors" in all_text or "humidity" in all_text or "ambient; no monitoring" in all_text:
-        detected.append(
-            DataGap(
-                category=EvidenceCategory.PERFORMANCE_VARIATION,
-                description=(
-                    "Environmental humidity exposure is plausible from the inputs, but no direct "
-                    "humidity or ambient-condition monitoring data was provided."
-                ),
-                severity=GapSeverity.MODERATE,
-                affects_hypotheses=_affected_for_templates(
-                    {"TMPL_MATERIAL_HANDLING", "TMPL_ENVIRONMENTAL"}
-                ),
-            )
-        )
-
-    if ("coverage" in all_text or "geometry-challenged" in all_text) and (
-        "no thickness gauge" in all_text or "visual inspection of coverage" in all_text
-        or "no quantitative measurement exists" in all_text
-        or "hardest to verify" in all_text
-    ):
-        detected.append(
-            DataGap(
-                category=EvidenceCategory.DETECTION_AUDIT,
-                description=(
-                    "Adhesive coverage verification is limited to visual checks; quantitative "
-                    "coverage or thickness confirmation is not available."
-                ),
-                severity=GapSeverity.MODERATE,
-                affects_hypotheses=_affected_for_templates(
-                    {"TMPL_DESIGN_GEOMETRY", "TMPL_SURFACE_PREP"}
-                ),
-            )
-        )
-
-    return detected

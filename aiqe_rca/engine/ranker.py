@@ -1,71 +1,58 @@
-"""Hypothesis ranking engine.
+"""Contradiction-aware hypothesis ranking."""
 
-Ranks hypotheses as Primary / Secondary / Conditional Amplifier based on
-net evidence support and gap severity. Internal scores are never exposed.
-Same inputs → same ranking every time.
-"""
+from __future__ import annotations
 
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.gaps import DataGap, GapSeverity
 from aiqe_rca.models.hypothesis import Hypothesis, RankLabel
 
-_TEMPLATE_RANK_BIAS = {
-    "TMPL_SURFACE_PREP": 1.5,
-    "TMPL_DESIGN_GEOMETRY": 1.25,
-    "TMPL_MATERIAL_HANDLING": 1.0,
-    "TMPL_ENVIRONMENTAL": 1.0,
-    "TMPL_PROCESS_PARAM": -1.5,
-    "TMPL_EQUIPMENT_CONDITION": -0.75,
-    "TMPL_HUMAN_DISCIPLINE": -1.5,
-    "TMPL_DETECTION_GAP": -1.5,
-}
-
-_FALSE_LEAD_TEMPLATES = {
-    "TMPL_PROCESS_PARAM",
-    "TMPL_EQUIPMENT_CONDITION",
-    "TMPL_HUMAN_DISCIPLINE",
-    "TMPL_DETECTION_GAP",
-}
-
 
 def _count_alignments(
-    hypothesis_id: str, alignments: list[AlignmentResult]
+    hypothesis_id: str,
+    alignments: list[AlignmentResult],
 ) -> tuple[int, int, int, int]:
-    """Count supporting, weakening, contradicting, and indeterminate alignments."""
+    """Return supporting, weakening, contradictory, and indeterminate counts."""
     supporting = 0
     weakening = 0
-    contradicting = 0
+    contradictory = 0
     indeterminate = 0
-    for a in alignments:
-        if a.hypothesis_id != hypothesis_id:
+
+    for alignment in alignments:
+        if alignment.hypothesis_id != hypothesis_id:
             continue
-        if a.classification == AlignmentLabel.SUPPORTING:
+        if alignment.classification == AlignmentLabel.SUPPORTING:
             supporting += 1
-        elif a.classification == AlignmentLabel.WEAKENING:
+        elif alignment.classification == AlignmentLabel.WEAKENING:
             weakening += 1
-        elif a.classification == AlignmentLabel.CONTRADICTING:
-            contradicting += 1
+        elif alignment.classification == AlignmentLabel.CONTRADICTING:
+            contradictory += 1
         else:
             indeterminate += 1
-    return supporting, weakening, contradicting, indeterminate
+
+    return supporting, weakening, contradictory, indeterminate
 
 
 def _compute_gap_severity(hypothesis_id: str, gaps: list[DataGap]) -> int:
-    """Compute gap severity score for a hypothesis.
-
-    Each gap that affects this hypothesis contributes:
-    - CRITICAL: 2 points
-    - MODERATE: 1 point
-    - MINOR: 0 points
-    """
+    """Compute a deterministic penalty score from affected data gaps."""
     severity = 0
     for gap in gaps:
-        if hypothesis_id in gap.affects_hypotheses:
-            if gap.severity == GapSeverity.CRITICAL:
-                severity += 2
-            elif gap.severity == GapSeverity.MODERATE:
-                severity += 1
+        if hypothesis_id not in gap.affects_hypotheses:
+            continue
+        if gap.severity == GapSeverity.CRITICAL:
+            severity += 2
+        elif gap.severity == GapSeverity.MODERATE:
+            severity += 1
     return severity
+
+
+def _score_hypothesis(
+    supporting: int,
+    weakening: int,
+    contradictory: int,
+    gap_penalty: int,
+) -> int:
+    """Apply the Phase-2 contradiction-aware scoring rule."""
+    return (supporting * 2) - weakening - (contradictory * 3) - gap_penalty
 
 
 def rank_hypotheses(
@@ -73,51 +60,65 @@ def rank_hypotheses(
     alignments: list[AlignmentResult],
     gaps: list[DataGap],
 ) -> list[Hypothesis]:
-    """Rank hypotheses and assign labels: Primary / Secondary / Conditional Amplifier.
+    """Rank hypotheses using support, contradiction, and gap penalties.
 
-    Logic:
-    1. For each hypothesis compute net_support = supporting - weakening - (2 * contradicting).
-    2. Compute gap_severity for each hypothesis.
-    3. Compute composite = net_support - gap_severity (internal only).
-    4. Sort descending by composite (ties broken by hypothesis ID for determinism).
-    5. Assign labels:
-       - First hypothesis → Primary Contributor
-       - Second → Secondary Contributor
-       - Third and fourth → Conditional Amplifier
-
-    Returns:
-        Hypotheses sorted and labeled (modified in-place and returned).
+    Primary ranking rule:
+    - score = support*2 - weakening - contradiction*3 - gap_penalty
+    - a contradicted hypothesis cannot be Primary if a non-contradicted alternative exists
+      with an equal or better ranking position
     """
-    # Compute scores
     counts_by_hypothesis: dict[str, tuple[int, int, int, int]] = {}
-    for h in hypotheses:
-        supporting, weakening, contradicting, indeterminate = _count_alignments(h.id, alignments)
-        counts_by_hypothesis[h.id] = (supporting, weakening, contradicting, indeterminate)
-        h.net_support = supporting - weakening - (2 * contradicting)
-        h.gap_severity = _compute_gap_severity(h.id, gaps)
-
-    # Sort: highest composite first, adjusted by template role bias.
-    hypotheses.sort(
-        key=lambda h: (
-            -(
-                h.net_support
-                - h.gap_severity
-                + _TEMPLATE_RANK_BIAS.get(h.template_id or "", 0.0)
-            ),
-            h.id,
+    for hypothesis in hypotheses:
+        supporting, weakening, contradictory, indeterminate = _count_alignments(
+            hypothesis.id,
+            alignments,
         )
+        counts_by_hypothesis[hypothesis.id] = (
+            supporting,
+            weakening,
+            contradictory,
+            indeterminate,
+        )
+        hypothesis.gap_severity = _compute_gap_severity(hypothesis.id, gaps)
+        hypothesis.net_support = _score_hypothesis(
+            supporting,
+            weakening,
+            contradictory,
+            hypothesis.gap_severity,
+        )
+
+    ranked = sorted(
+        hypotheses,
+        key=lambda hypothesis: (
+            -hypothesis.net_support,
+            counts_by_hypothesis[hypothesis.id][2],
+            counts_by_hypothesis[hypothesis.id][1],
+            hypothesis.id,
+        ),
     )
 
-    # Assign labels
-    for idx, h in enumerate(hypotheses):
-        supporting, weakening, contradicting, _ = counts_by_hypothesis.get(h.id, (0, 0, 0, 0))
-        if idx == 0:
-            h.rank_label = RankLabel.PRIMARY
-        elif idx == 1:
-            h.rank_label = RankLabel.SECONDARY
-        elif h.template_id in _FALSE_LEAD_TEMPLATES and (contradicting > 0 or weakening >= supporting):
-            h.rank_label = RankLabel.DEPRIORITIZED
-        else:
-            h.rank_label = RankLabel.CONDITIONAL_AMPLIFIER
+    non_contradicted = [
+        hypothesis
+        for hypothesis in ranked
+        if counts_by_hypothesis[hypothesis.id][2] == 0
+    ]
+    if non_contradicted:
+        primary = non_contradicted[0]
+        remaining = [hypothesis for hypothesis in ranked if hypothesis.id != primary.id]
+        ranked = [primary] + remaining
 
+    for index, hypothesis in enumerate(ranked):
+        supporting, weakening, contradictory, _ = counts_by_hypothesis[hypothesis.id]
+        if index == 0:
+            hypothesis.rank_label = RankLabel.PRIMARY
+            continue
+        if index == 1:
+            hypothesis.rank_label = RankLabel.SECONDARY
+            continue
+        if contradictory > 0 or hypothesis.net_support < 0 or weakening >= supporting:
+            hypothesis.rank_label = RankLabel.DEPRIORITIZED
+        else:
+            hypothesis.rank_label = RankLabel.CONDITIONAL_AMPLIFIER
+
+    hypotheses[:] = ranked
     return hypotheses

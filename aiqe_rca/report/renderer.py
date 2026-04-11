@@ -86,23 +86,23 @@ def render_pdf(report: ReportOutput, output_path: Path) -> Path:
 def render_json(report: ReportOutput) -> str:
     """Render the report as machine-readable JSON."""
     tdata = getattr(report, "_template_data", {}) or {}
+    reasoning_artifact = tdata.get("reasoning_artifact", {})
     analysis = None
     if report.analysis_result:
         analysis = {
             "hypotheses": tdata.get("hypotheses", []),
-            "pre_ranking_hypotheses": tdata.get("reasoning_artifacts", {}).get(
-                "pre_ranking_hypotheses", []
-            ),
             "evidence_relationships": tdata.get("relationship_entries", []),
             "contradictions": tdata.get("contradictions", []),
-            "gaps": tdata.get("reasoning_artifacts", {}).get("gap_log", []),
-            "reasoning_artifacts": tdata.get("reasoning_artifacts", {}),
+            "gaps": tdata.get("gaps", []),
             "confidence": report.analysis_result.confidence.value,
             "stateless_execution": {
                 "isolated_per_request": True,
                 "shared_request_context": False,
                 "deterministic_input_hash": report.input_hash,
-                "memory_reuse": "No prior report content or vocabulary is stored in engine state.",
+                "confirmation": tdata.get(
+                    "stateless_confirmation",
+                    "This run used only current input. No prior context reused.",
+                ),
             },
         }
     report_dict = {
@@ -116,6 +116,7 @@ def render_json(report: ReportOutput) -> str:
             {"title": s.title, "content": s.content} for s in report.sections
         ],
         "analysis": analysis,
+        "reasoning_artifact": reasoning_artifact,
         "evidence_trace_map": report.evidence_trace_map,
         "input_hash": report.input_hash,
         "timestamp": report.timestamp,

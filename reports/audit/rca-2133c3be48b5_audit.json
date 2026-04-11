@@ -1,0 +1,16 @@
+{
+  "input_hash": "e26eac137b5645fe5338ebab9d15a96449ca514072b3a8a4b1fc6d490c7187c8",
+  "timestamp": "2026-04-11T17:46:35.563812+00:00",
+  "trace_map": [
+    {
+      "source_file": "observations_01.txt",
+      "evidence_ids": [
+        "E-a986ba4f-5258-5fad-9ba6-4183356c2e39"
+      ],
+      "report_references": []
+    }
+  ],
+  "file_manifest": [
+    "observations_01.txt"
+  ]
+}

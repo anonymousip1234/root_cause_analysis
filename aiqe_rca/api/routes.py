@@ -6,9 +6,9 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from aiqe_rca.api.schemas import (
     AnalyzeResponse,
@@ -37,23 +37,65 @@ async def health_check():
     return HealthResponse()
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(
-    problem_statement: Annotated[
-        str,
-        Form(..., description="Problem description text"),
-    ],
-    files: Annotated[
-        list[UploadFile],
-        File(description="Documents to analyze. Upload one or more files (PDF, DOCX, XLSX, CSV, TXT, JSON, JPG, PNG)."),
-    ],
-):
+@router.post(
+    "/analyze",
+    response_model=AnalyzeResponse,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["problem_statement", "files"],
+                        "properties": {
+                            "problem_statement": {
+                                "type": "string",
+                                "description": "Problem description text",
+                            },
+                            "files": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "format": "binary",
+                                },
+                                "description": (
+                                    "Documents to analyze. Upload one or more files "
+                                    "(PDF, DOCX, XLSX, CSV, TXT, JSON, JPG, PNG)."
+                                ),
+                            },
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def analyze(request: Request):
     """Run a root cause analysis on uploaded documents.
 
     Accepts multiple files (PDF, DOCX, XLSX, CSV, TXT, JSON, JPG, PNG)
     and a problem statement. Returns a deterministic diagnostic report.
     """
-    uploaded_files: list[UploadFile] = [f for f in files if f.filename]
+    form = await request.form()
+
+    problem_statement = str(form.get("problem_statement") or "").strip()
+    if not problem_statement:
+        raise HTTPException(
+            status_code=422,
+            detail="Field 'problem_statement' is required.",
+        )
+
+    raw_files = [
+        item
+        for field_name in ("files", "file")
+        for item in form.getlist(field_name)
+    ]
+    uploaded_files: list[UploadFile] = [
+        item
+        for item in raw_files
+        if isinstance(item, (UploadFile, StarletteUploadFile)) and item.filename
+    ]
 
     # Validate files
     if not uploaded_files:

@@ -1,9 +1,6 @@
-"""Confidence assessment engine.
+"""Deterministic confidence assessment."""
 
-Assigns qualitative confidence level (Low / Medium / High) to the overall analysis.
-Confidence is reduced when the leading explanation is indirect, when strong gaps remain,
-or when material weakening/contradictory signals are present.
-"""
+from __future__ import annotations
 
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.gaps import DataGap, GapSeverity
@@ -16,50 +13,38 @@ def assess_confidence(
     alignments: list[AlignmentResult],
     gaps: list[DataGap],
 ) -> ConfidenceLevel:
-    """Assess overall analysis confidence using deterministic qualitative rules."""
+    """Assign Low, Medium, or High confidence from current-run evidence only."""
     if not hypotheses or not alignments:
         return ConfidenceLevel.LOW
 
-    primary = next((h for h in hypotheses if h.rank_label == RankLabel.PRIMARY), None)
+    primary = next((hypothesis for hypothesis in hypotheses if hypothesis.rank_label == RankLabel.PRIMARY), None)
     if primary is None:
         return ConfidenceLevel.LOW
 
-    primary_alignments = [a for a in alignments if a.hypothesis_id == primary.id]
+    primary_alignments = [
+        alignment for alignment in alignments if alignment.hypothesis_id == primary.id
+    ]
     primary_support = sum(
-        1 for a in primary_alignments if a.classification == AlignmentLabel.SUPPORTING
+        1 for alignment in primary_alignments if alignment.classification == AlignmentLabel.SUPPORTING
     )
     primary_weakening = sum(
-        1 for a in primary_alignments if a.classification == AlignmentLabel.WEAKENING
+        1 for alignment in primary_alignments if alignment.classification == AlignmentLabel.WEAKENING
     )
-    contradictions = sum(
-        1 for a in alignments if a.classification == AlignmentLabel.CONTRADICTING
+    primary_contradictions = sum(
+        1 for alignment in primary_alignments if alignment.classification == AlignmentLabel.CONTRADICTING
     )
-    critical_gaps = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
-    moderate_gaps = sum(1 for g in gaps if g.severity == GapSeverity.MODERATE)
+    critical_gaps = sum(1 for gap in gaps if gap.severity == GapSeverity.CRITICAL)
+    moderate_gaps = sum(1 for gap in gaps if gap.severity == GapSeverity.MODERATE)
 
-    contextual_gap_terms = (
-        "handling variability",
-        "storage / staging",
-        "humidity",
-        "coverage verification",
-        "visual only",
-    )
-    contextual_gaps = sum(
-        1
-        for g in gaps
-        if any(term in g.description.lower() for term in contextual_gap_terms)
-    )
-
-    if primary_support == 0 or critical_gaps >= 3 or contradictions >= 3:
+    if primary_support == 0 or primary_contradictions > 0 or critical_gaps >= 2:
         return ConfidenceLevel.LOW
 
     if (
         primary_support >= 3
         and primary_weakening == 0
-        and contradictions == 0
+        and primary_contradictions == 0
         and critical_gaps == 0
-        and moderate_gaps <= 1
-        and contextual_gaps == 0
+        and moderate_gaps == 0
     ):
         return ConfidenceLevel.HIGH
 
