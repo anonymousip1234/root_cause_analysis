@@ -15,6 +15,10 @@ global_disallowed:
   - "root cause is"
   - "the cause is"
   - "the root cause"
+  # Definitive causal phrasing banned by the Hypothesis Abstraction Guide
+  - "is causing"
+  - "is due to"
+  - "is caused by"
   # Directive / prescriptive verbs (ordering actions)
   - "you must"
   - "you should"

@@ -14,9 +14,27 @@ from __future__ import annotations
 
 import re
 
+import yaml
+
+from aiqe_rca.config import settings
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.evidence import EvidenceElement
 from aiqe_rca.models.hypothesis import Hypothesis
+
+_SIGNAL_GROUPS_CACHE: dict[str, dict] | None = None
+
+
+def _get_signal_groups() -> dict[str, dict]:
+    """Load signal groups once per process for group-specific pattern lookup."""
+    global _SIGNAL_GROUPS_CACHE
+    if _SIGNAL_GROUPS_CACHE is None:
+        path = settings.rules_dir / "signal_groups.yaml"
+        with open(path, encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        _SIGNAL_GROUPS_CACHE = {
+            group["id"]: group for group in data.get("signal_groups", [])
+        }
+    return _SIGNAL_GROUPS_CACHE
 
 _SUPPORTING_PATTERNS = (
     "failure",
@@ -165,28 +183,49 @@ def _count_pattern_hits(text: str, patterns: tuple[str, ...]) -> list[str]:
     return sorted(set(matches))
 
 
-def _score_statement(statement: str, hypothesis_terms: list[str]) -> tuple[int, int, int, list[str]]:
+def _group_contradicting_patterns(hypothesis: Hypothesis) -> tuple[str, ...]:
+    """Return contradicting patterns specific to this hypothesis's signal group.
+
+    Generic contradictory patterns (e.g., "stable", "within limits") only apply
+    when the hypothesis is itself about stability/control. For cause-level
+    groups, we rely exclusively on the group's own contradicting_signals so
+    that a contradiction for one group never leaks into another.
+    """
+    groups = _get_signal_groups()
+    group = groups.get(hypothesis.template_id or "")
+    if group is None:
+        return _CONTRADICTORY_PATTERNS
+    return tuple(group.get("contradicting_signals", []))
+
+
+def _score_statement(
+    statement: str,
+    hypothesis: Hypothesis,
+    hypothesis_terms: list[str],
+) -> tuple[int, int, int, list[str]]:
     """Score one evidence statement against one hypothesis.
 
     Returns:
         supporting_score, weakening_score, contradictory_score, matched_phrases
     """
     term_hits = _matched_terms(statement, hypothesis_terms)
-    if not term_hits:
+    contradicting_patterns = _group_contradicting_patterns(hypothesis)
+    contradictory_hits = _count_pattern_hits(statement, contradicting_patterns)
+
+    if not term_hits and not contradictory_hits:
         return 0, 0, 0, []
 
     supporting_hits = _count_pattern_hits(statement, _SUPPORTING_PATTERNS)
     weakening_hits = _count_pattern_hits(statement, _WEAKENING_PATTERNS)
-    contradictory_hits = _count_pattern_hits(statement, _CONTRADICTORY_PATTERNS)
     negated_terms = [term for term in term_hits if _term_negated(statement, term)]
 
-    supporting_score = len(supporting_hits)
-    weakening_score = len(weakening_hits)
+    supporting_score = len(supporting_hits) if term_hits else 0
+    weakening_score = len(weakening_hits) if term_hits else 0
     contradictory_score = len(contradictory_hits) + len(negated_terms)
 
     # If the statement directly names the hypothesis signal and also references the
     # problem/failure state, treat it as supportive even without a canned pattern.
-    if term_hits and supporting_score == 0:
+    if term_hits and supporting_score == 0 and contradictory_score == 0:
         statement_tokens = set(_tokenize(statement))
         if statement_tokens.intersection({"failure", "defect", "issue", "problem", "variation", "fallout"}):
             supporting_score += 1
@@ -224,6 +263,7 @@ def classify_alignment(
     for statement in statements:
         supporting_score, weakening_score, contradictory_score, phrases = _score_statement(
             statement,
+            hypothesis,
             hypothesis_terms,
         )
         total_supporting += supporting_score

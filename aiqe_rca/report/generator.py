@@ -321,7 +321,13 @@ def _validate_result_against_current_input(
     result: AnalysisResult,
     reasoning_artifact: dict,
 ) -> None:
-    """Fail fast if the generated output cannot be traced to current input."""
+    """Fail fast if the generated output cannot be traced to current input.
+
+    Hypothesis names are cause-level groupings per the Hypothesis Abstraction
+    Guide, so the name itself is not required to appear in the input. Instead,
+    at least one keyword (i.e., a member signal of the group) must be present
+    in the current input — that is what keeps each hypothesis input-driven.
+    """
     current_input_text = _normalize_text(
         " ".join([result.problem_statement] + [evidence.text_content for evidence in result.evidence_elements])
     )
@@ -329,20 +335,21 @@ def _validate_result_against_current_input(
     errors: list[str] = []
     for hypothesis in result.pre_ranking_hypotheses + result.hypotheses:
         process_name = hypothesis.process_step or ""
-        if process_name and not (
-            _contains_phrase(current_input_text, process_name)
-            or _tokens_in_text(current_input_text, process_name)
-        ):
-            errors.append(f"Hypothesis term is not traceable to current input: {process_name}")
+        if not process_name:
+            continue
+        keyword_hit = any(
+            _contains_phrase(current_input_text, keyword)
+            or _tokens_in_text(current_input_text, keyword)
+            for keyword in hypothesis.keywords
+        )
+        if not keyword_hit:
+            errors.append(
+                f"Hypothesis signals are not traceable to current input: {process_name}"
+            )
 
     for entry in reasoning_artifact.get("evidence_classification_table", []):
         if entry.get("tag") not in _ALLOWED_TAGS:
             errors.append(f"Invalid evidence tag: {entry.get('tag')}")
-        if entry.get("hypothesis") and not (
-            _contains_phrase(current_input_text, entry["hypothesis"])
-            or _tokens_in_text(current_input_text, entry["hypothesis"])
-        ):
-            errors.append(f"Artifact hypothesis is not traceable to current input: {entry['hypothesis']}")
 
     for required_key in (
         "pre_ranking_hypotheses",

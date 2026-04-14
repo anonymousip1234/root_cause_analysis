@@ -46,8 +46,10 @@ def test_hypothesis_builder_returns_2_to_4():
     hypotheses = build_hypotheses(problem, evidence)
 
     assert 2 <= len(hypotheses) <= 4
-    assert all(h.template_id is None for h in hypotheses)
-    assert any("coolant" in (h.process_step or "") for h in hypotheses)
+    # Hypotheses must be grouped into signal-group templates, not promoted
+    # directly from extracted terms.
+    assert all(h.template_id for h in hypotheses)
+    assert any("coolant instability" in (h.process_step or "") for h in hypotheses)
 
 
 def test_hypothesis_builder_deterministic():
@@ -60,7 +62,8 @@ def test_hypothesis_builder_deterministic():
     assert all(run == labels[0] for run in labels)
 
 
-def test_hypothesis_builder_uses_current_input_terms_only():
+def test_hypothesis_builder_uses_current_input_signals_only():
+    """Each hypothesis must be grounded in signals that appear in current input."""
     problem = "Tool wear and chatter marks were observed."
     evidence = [_make_evidence("E1", "Coolant flow was steady but tool wear was visible.")]
 
@@ -68,9 +71,11 @@ def test_hypothesis_builder_uses_current_input_terms_only():
     current_input = f"{problem} {' '.join(item.text_content for item in evidence)}".lower()
 
     for hypothesis in hypotheses:
-        tokens = (hypothesis.process_step or "").split()
-        assert tokens
-        assert all(token in current_input for token in tokens)
+        assert hypothesis.keywords, f"{hypothesis.id} has no signal keywords"
+        # At least one signal member must appear in the current input.
+        assert any(keyword.lower() in current_input for keyword in hypothesis.keywords), (
+            f"{hypothesis.id} has no signals traceable to current input"
+        )
 
 
 def test_classify_supporting():

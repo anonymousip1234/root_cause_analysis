@@ -1,0 +1,186 @@
+# AIQE Phase 2 — Hypothesis Abstraction Guide: Signal Groups
+#
+# Each signal group converts a family of related input signals into a
+# cause-level diagnostic hypothesis expressed as a plausible contributor.
+#
+# Core rule (non-negotiable): never promote extracted terms directly into
+# hypotheses. Group related signals, then convert each group into a
+# cause-level explanation. Hypotheses must remain diagnostic, never definitive.
+#
+# Language: "could be driven by", "may indicate", "is consistent with",
+#           "may be explained by", "may be contributing".
+
+signal_groups:
+  - id: SG_MACHINING_INSTABILITY
+    name: "machining instability that could be driven by tool wear and feed-rate interaction"
+    signals:
+      - vibration
+      - chatter
+      - chatter marks
+      - tool wear
+      - feed rate
+      - feed-rate
+      - spindle
+      - spindle speed
+      - surface finish
+      - cutter
+      - runout
+      - rigidity
+    contradicting_signals:
+      - no tool wear
+      - tool wear was not observed
+      - feed rate showed no recorded changes
+      - spindle speed remained within limits
+      - spindle speed stayed stable
+      - no spindle variation
+
+  - id: SG_COOLANT_INSTABILITY
+    name: "coolant instability that may be influencing machining stability"
+    signals:
+      - coolant
+      - coolant flow
+      - coolant delivery
+      - low coolant
+      - coolant pressure
+      - coolant temperature
+      - lubricant
+      - flow variation
+      - flow fluctuation
+      - low-flow
+    contradicting_signals:
+      - coolant flow was stable
+      - coolant remained within limits
+      - no coolant variation
+
+  - id: SG_SURFACE_BOND_CONDITION
+    name: "surface or adhesive condition variation that could affect bond integrity"
+    signals:
+      - adhesive
+      - adhesive coverage
+      - surface prep
+      - surface condition
+      - surface cleaning
+      - wipe
+      - manual wipe
+      - primer
+      - phosphate
+      - residue
+      - contamination
+      - bond lift
+      - bond failure
+      - blistering
+      - wet-out
+      - adhesion
+    contradicting_signals:
+      - surface prep verified
+      - bond verified
+      - no contamination found
+      - surface clean
+
+  - id: SG_INSPECTION_DETECTION_GAP
+    name: "inspection or detection gap that may allow defects to escape"
+    signals:
+      - visual inspection
+      - visual only
+      - no thickness gauge
+      - no quantitative measurement
+      - sampling
+      - missed
+      - escape
+      - coverage verification
+      - hardest to verify
+      - control plan gap
+      - inspection gap
+      - detection gap
+    contradicting_signals:
+      - inspection verified
+      - 100% inspection
+
+  - id: SG_ENVIRONMENTAL_STORAGE
+    name: "environmental or storage conditions that could be contributing as an amplifier"
+    signals:
+      - humidity
+      - moisture
+      - condensation
+      - ambient
+      - storage
+      - staging
+      - shelf life
+      - shelf-life
+      - exposure
+      - exposure time
+      - open container
+      - dock
+      - dock doors
+      - 48 hours
+      - stored longer
+      - environmental
+    contradicting_signals:
+      - humidity controlled
+      - environmental monitoring in place
+
+  - id: SG_NON_MACHINE_SPECIFIC_PATTERN
+    name: "pattern consistent with non-machine-specific process instability"
+    signals:
+      - multi-tool
+      - multi-machine
+      - multiple machines
+      - multiple presses
+      - across lots
+      - across shifts
+      - across tools
+      - inconsistent pattern
+      - intermittent across
+      - no single press
+      - no single cavity
+      - no clear correlation
+      - no consistent shift
+    contradicting_signals:
+      - isolated to one machine
+      - single press correlation
+
+  - id: SG_PROCESS_PARAMETER_VARIATION
+    name: "process parameter variation that may be contributing as a competing factor"
+    signals:
+      - cure temperature
+      - cure time
+      - oven temperature
+      - setpoint
+      - parameter drift
+      - process shift
+      - dwell time
+      - cycle time
+      - profile
+      - pressure variation
+      - temperature variation
+    contradicting_signals:
+      - no recorded changes to cure time or cure temperature
+      - no consistent shift in cure temperature or time
+      - spc data for cure temperature and cure time remain in control
+      - no process shifts detected
+      - stable molding parameters
+      - spc on cure temp and cure time
+      - automated press controls
+      - parameters remained stable
+      - parameters within limits
+      - within control limits
+
+  - id: SG_EQUIPMENT_SETUP_VARIATION
+    name: "equipment or setup variation that may be contributing as a competing factor"
+    signals:
+      - press
+      - cavity
+      - tool change
+      - fixture
+      - alignment
+      - calibration
+      - maintenance
+      - equipment condition
+      - mechanical wear
+      - press malfunction
+    contradicting_signals:
+      - no clear correlation to cavity, press, or batch
+      - no single press or cavity correlation
+      - multi-tool occurrence
+      - across multiple tools
+      - no equipment correlation

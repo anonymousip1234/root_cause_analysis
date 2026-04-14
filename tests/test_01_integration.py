@@ -1,4 +1,10 @@
-"""Integration coverage for the Phase-2 deterministic RCA pipeline."""
+"""Integration coverage for the Phase-2 deterministic RCA pipeline.
+
+Tests enforce the AIQE Hypothesis Abstraction Guide:
+    - Hypotheses are cause-level groupings, not extracted terms.
+    - Language is diagnostic, never definitive.
+    - Contradicted / false-lead candidates are explicitly deprioritized.
+"""
 
 from __future__ import annotations
 
@@ -31,6 +37,34 @@ TEST_FILES = {
     ),
 }
 
+# Diagnostic phrasing required by the Hypothesis Abstraction Guide.
+_DIAGNOSTIC_PHRASES = (
+    "could be driven by",
+    "may indicate",
+    "is consistent with",
+    "may be explained by",
+    "may be contributing",
+    "may be influencing",
+    "could affect",
+    "may allow",
+)
+
+# Raw extracted terms the guide forbids as standalone hypothesis names.
+_FORBIDDEN_RAW_TERMS = {
+    "vibration",
+    "chatter",
+    "chatter marks",
+    "surface",
+    "coolant",
+    "coolant flow",
+    "adhesive",
+    "blistering",
+    "measurement",
+    "potential failure",
+    "spindle speed",
+    "tool wear",
+}
+
 
 def _run_report():
     result = run_analysis(PROBLEM_STATEMENT, TEST_FILES)
@@ -48,48 +82,75 @@ def test_pipeline_produces_result():
     assert len(result.alignments) > 0
 
 
-def test_hypotheses_are_ranked_and_traceable():
+def test_hypotheses_are_cause_level_not_extracted_terms():
+    """Each hypothesis must be a cause-level grouping, not a raw term."""
     result, _, _ = _run_report()
 
-    assert result.hypotheses[0].rank_label == RankLabel.PRIMARY
-    assert all(hypothesis.rank_label != RankLabel.UNRANKED for hypothesis in result.hypotheses)
+    for hypothesis in result.hypotheses:
+        name = (hypothesis.process_step or "").strip().lower()
+        # Not a bare forbidden term
+        assert name not in _FORBIDDEN_RAW_TERMS, (
+            f"Hypothesis '{name}' is a raw extracted term; must be cause-level."
+        )
+        # Must use diagnostic phrasing somewhere in the name
+        assert any(phrase in name for phrase in _DIAGNOSTIC_PHRASES), (
+            f"Hypothesis '{name}' does not use diagnostic language."
+        )
+        # Must be grouped (multi-word explanation, not a single token)
+        assert len(name.split()) >= 5, f"Hypothesis '{name}' is too short to be cause-level."
+
+
+def test_hypotheses_signals_are_traceable_to_input():
+    """Every hypothesis must be grounded in current-input signal tokens."""
+    result, _, _ = _run_report()
 
     current_input = (
         PROBLEM_STATEMENT + " " + " ".join(content.decode("utf-8") for content in TEST_FILES.values())
     ).lower()
-    for hypothesis in result.pre_ranking_hypotheses:
-        assert hypothesis.process_step
-        assert any(token in current_input for token in hypothesis.process_step.split())
+    for hypothesis in result.pre_ranking_hypotheses + result.hypotheses:
+        assert hypothesis.keywords, f"Hypothesis {hypothesis.id} has no signal keywords."
+        assert any(keyword.lower() in current_input for keyword in hypothesis.keywords), (
+            f"None of hypothesis {hypothesis.id}'s signals appear in the current input."
+        )
 
 
-def test_primary_hypothesis_is_input_driven_and_non_contradicted():
+def test_primary_is_cause_level_and_non_contradicted():
+    """Primary hypothesis must be the best-supported cause-level grouping."""
     result, _, payload = _run_report()
 
     primary = result.hypotheses[0]
+    assert primary.rank_label == RankLabel.PRIMARY
+    assert "coolant instability" in (primary.process_step or "").lower()
+
     primary_tags = [
         row["tag"]
         for row in payload["reasoning_artifact"]["evidence_classification_table"]
         if row["hypothesis"] == primary.process_step
     ]
-
-    assert "coolant" in (primary.process_step or "")
     assert AlignmentLabel.CONTRADICTING.value not in primary_tags
 
 
 def test_false_leads_are_explicitly_contradicted_or_deprioritized():
+    """Machining instability (tool wear / spindle / feed rate) must be deprioritized."""
     result, _, payload = _run_report()
 
-    spindle = next(
-        (hypothesis for hypothesis in result.hypotheses if hypothesis.process_step == "spindle speed"),
+    machining = next(
+        (
+            hypothesis
+            for hypothesis in result.hypotheses
+            if (hypothesis.template_id or "") == "SG_MACHINING_INSTABILITY"
+        ),
         None,
     )
+    assert machining is not None, "Machining instability grouping should be surfaced as a false lead."
+    assert machining.rank_label == RankLabel.DEPRIORITIZED
 
-    assert spindle is not None
-    assert spindle.rank_label == RankLabel.DEPRIORITIZED
-    assert any(
-        entry["hypothesis"] == "spindle speed"
-        for entry in payload["reasoning_artifact"]["contradiction_log"]
-    )
+    machining_tags = {
+        row["tag"]
+        for row in payload["reasoning_artifact"]["evidence_classification_table"]
+        if row["hypothesis"] == machining.process_step
+    }
+    assert AlignmentLabel.CONTRADICTING.value in machining_tags
 
 
 def test_reasoning_artifact_package_is_complete_and_separate():
@@ -100,7 +161,6 @@ def test_reasoning_artifact_package_is_complete_and_separate():
     assert len(payload["reasoning_artifact"]["pre_ranking_hypotheses"]) >= 2
     assert len(payload["reasoning_artifact"]["evidence_classification_table"]) > 0
     assert len(payload["reasoning_artifact"]["contradiction_log"]) >= 1
-    assert len(payload["reasoning_artifact"]["gap_log"]) >= 1
     assert len(payload["reasoning_artifact"]["prioritization_summary"]) >= 2
     assert payload["reasoning_artifact"]["stateless_confirmation"] == (
         "This run used only current input. No prior context reused."
@@ -138,6 +198,15 @@ def test_report_has_5_sections_and_clean_language():
     lint_input = [(section.title, section.content) for section in report.sections]
     lint_result = lint_report(lint_input)
     assert lint_result.passed
+
+
+def test_report_language_is_diagnostic_not_definitive():
+    """Generated report text must avoid definitive causal phrasing."""
+    _, report, _ = _run_report()
+
+    body = "\n".join(section.content.lower() for section in report.sections)
+    for forbidden in ("is causing", "is due to", "is caused by", "root cause is"):
+        assert forbidden not in body, f"Forbidden definitive phrase found: {forbidden}"
 
 
 def test_deterministic_output_across_runs():

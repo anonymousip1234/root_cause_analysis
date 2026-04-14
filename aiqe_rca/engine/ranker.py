@@ -107,16 +107,23 @@ def rank_hypotheses(
         remaining = [hypothesis for hypothesis in ranked if hypothesis.id != primary.id]
         ranked = [primary] + remaining
 
+    secondary_assigned = False
     for index, hypothesis in enumerate(ranked):
         supporting, weakening, contradictory, _ = counts_by_hypothesis[hypothesis.id]
         if index == 0:
             hypothesis.rank_label = RankLabel.PRIMARY
             continue
-        if index == 1:
-            hypothesis.rank_label = RankLabel.SECONDARY
-            continue
-        if contradictory > 0 or hypothesis.net_support < 0 or weakening >= supporting:
+        is_false_lead = (
+            contradictory > 0
+            or hypothesis.net_support < 0
+            or weakening >= max(supporting, 1)
+        )
+        if is_false_lead:
             hypothesis.rank_label = RankLabel.DEPRIORITIZED
+            continue
+        if not secondary_assigned:
+            hypothesis.rank_label = RankLabel.SECONDARY
+            secondary_assigned = True
         else:
             hypothesis.rank_label = RankLabel.CONDITIONAL_AMPLIFIER
 
