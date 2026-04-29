@@ -193,10 +193,7 @@ def build_hypotheses(
             {signal.lower() for signal in group.get("signals", [])}
             | {signal.lower() for signal in item["matched_signals"]}
         )
-        description = (
-            f"The current input is consistent with {group['name']}. "
-            f"Matched signals: {', '.join(item['matched_signals']) or 'none'}."
-        )
+        description = f"The current input is consistent with {group['name']}."
         hypotheses.append(
             Hypothesis(
                 id=f"H{index}",

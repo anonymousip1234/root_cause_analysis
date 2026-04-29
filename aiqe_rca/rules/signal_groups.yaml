@@ -33,6 +33,15 @@ signal_groups:
       - spindle speed remained within limits
       - spindle speed stayed stable
       - no spindle variation
+    expected_conditions:
+      - elevated vibration
+      - chatter marks observed
+      - surface finish degradation
+      - feed rate correlation with defects
+      - tool wear trend
+      - spindle speed variation
+      - runout measurement exceeded
+      - increasing surface roughness
 
   - id: SG_COOLANT_INSTABILITY
     name: "coolant instability that may be influencing machining stability"
@@ -51,6 +60,14 @@ signal_groups:
       - coolant flow was stable
       - coolant remained within limits
       - no coolant variation
+    expected_conditions:
+      - reduced coolant flow
+      - coolant pressure drop
+      - coolant temperature elevated
+      - lubricant insufficiency
+      - flow fluctuation detected
+      - heat buildup observed
+      - coolant delivery failure
 
   - id: SG_SURFACE_BOND_CONDITION
     name: "surface or adhesive condition variation that could affect bond integrity"
@@ -76,6 +93,16 @@ signal_groups:
       - bond verified
       - no contamination found
       - surface clean
+    expected_conditions:
+      - localized adhesive gap
+      - surface contamination detected
+      - adhesive coverage failure
+      - intermittent bond failure
+      - geometry specific occurrence
+      - manual wipe inconsistency
+      - surface residue present
+      - blistering observed
+      - bond lift detected
 
   - id: SG_INSPECTION_DETECTION_GAP
     name: "inspection or detection gap that may allow defects to escape"
@@ -95,6 +122,14 @@ signal_groups:
     contradicting_signals:
       - inspection verified
       - 100% inspection
+    expected_conditions:
+      - defects escaped inspection
+      - no measurement recorded
+      - visual only assessment
+      - sampling missed failures
+      - detection gap confirmed
+      - quantitative check absent
+      - coverage verification missing
 
   - id: SG_ENVIRONMENTAL_STORAGE
     name: "environmental or storage conditions that could be contributing as an amplifier"
@@ -118,6 +153,14 @@ signal_groups:
     contradicting_signals:
       - humidity controlled
       - environmental monitoring in place
+    expected_conditions:
+      - humidity above threshold
+      - moisture exposure confirmed
+      - extended shelf life exceeded
+      - storage temperature exceedance
+      - condensation observed
+      - open container exposure
+      - staging area humidity elevated
 
   - id: SG_NON_MACHINE_SPECIFIC_PATTERN
     name: "pattern consistent with non-machine-specific process instability"
@@ -138,6 +181,14 @@ signal_groups:
     contradicting_signals:
       - isolated to one machine
       - single press correlation
+    expected_conditions:
+      - multiple machines affected
+      - defects across presses
+      - no single tool correlation
+      - intermittent across shifts
+      - random distribution pattern
+      - across lots occurrence
+      - no consistent machine signature
 
   - id: SG_PROCESS_PARAMETER_VARIATION
     name: "process parameter variation that may be contributing as a competing factor"
@@ -164,6 +215,15 @@ signal_groups:
       - parameters remained stable
       - parameters within limits
       - within control limits
+    expected_conditions:
+      - cure temperature deviation
+      - cure time exceeded
+      - oven temperature drift
+      - setpoint exceedance
+      - process parameter shift detected
+      - dwell time variation
+      - temperature variation recorded
+      - parameter out of range
 
   - id: SG_EQUIPMENT_SETUP_VARIATION
     name: "equipment or setup variation that may be contributing as a competing factor"
@@ -184,3 +244,11 @@ signal_groups:
       - multi-tool occurrence
       - across multiple tools
       - no equipment correlation
+    expected_conditions:
+      - cavity specific pattern
+      - press specific occurrence
+      - fixture alignment issue
+      - equipment calibration gap
+      - maintenance overdue
+      - mechanical wear evidence
+      - press malfunction recorded

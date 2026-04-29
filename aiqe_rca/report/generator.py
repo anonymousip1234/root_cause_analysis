@@ -130,7 +130,7 @@ def _count_by_label(
 
 
 def _build_executive_summary(result: AnalysisResult) -> list[str]:
-    """Build a concise, generic executive summary."""
+    """Build a concise, engineer-readable executive summary."""
     if not result.hypotheses:
         return [FALLBACKS["summary"]]
 
@@ -140,24 +140,56 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
         return [FALLBACKS["summary"]]
 
     primary_counts = _count_by_label(result.alignments, primary.id)
-    paragraph_one = (
-        f"Primary contributor: {primary.process_step or primary.id}. "
-        f"It ranked first because the current input produced {primary_counts['supporting']} supporting, "
-        f"{primary_counts['weakening']} weakening, and {primary_counts['contradictory']} contradictory relationships for this hypothesis."
-    )
 
-    paragraph_two_parts = []
+    # Characterise the evidence picture for the primary hypothesis
+    if primary_counts["supporting"] >= 3 and primary_counts["contradictory"] == 0:
+        evidence_note = (
+            f"Multiple observations confirmed expected conditions, and no direct contradictions were found"
+        )
+    elif primary_counts["supporting"] > 0 and primary_counts["contradictory"] == 0:
+        evidence_note = (
+            f"{primary_counts['supporting']} observation(s) confirmed expected conditions "
+            f"with no direct contradictions"
+        )
+    elif primary_counts["supporting"] > 0 and primary_counts["contradictory"] > 0:
+        evidence_note = (
+            f"{primary_counts['supporting']} confirming observation(s) were identified, "
+            f"but {primary_counts['contradictory']} contradictory finding(s) reduce confidence"
+        )
+    else:
+        evidence_note = "direct confirmation from current inputs is limited"
+
+    contradiction_note = ""
+    if primary_counts["contradictory"] > 0:
+        contradiction_note = (
+            f" {primary_counts['contradictory']} contradictory finding(s) were identified "
+            f"and reduce confidence in this explanation."
+        )
+
+    paragraph_one = (
+        f"Analysis of the submitted evidence identifies "
+        f"{primary.process_step or primary.id} as the leading contributor. "
+        f"{evidence_note.capitalize()}.{contradiction_note}"
+    ).strip()
+
+    paragraph_two_parts: list[str] = []
     if secondary is not None:
         secondary_counts = _count_by_label(result.alignments, secondary.id)
         paragraph_two_parts.append(
-            f"Secondary contributor: {secondary.process_step or secondary.id} "
-            f"with {secondary_counts['supporting']} supporting relationships and "
-            f"{secondary_counts['contradictory']} contradictions."
+            f"{secondary.process_step or secondary.id} was identified as a secondary contributor "
+            f"({secondary_counts['supporting']} supporting, "
+            f"{secondary_counts['contradictory']} contradictory)."
         )
     if result.gaps:
-        paragraph_two_parts.append(
-            f"Confidence remains {result.confidence.value} because {len(result.gaps)} explicit data gaps still limit direct confirmation."
-        )
+        critical_gaps = sum(1 for g in result.gaps if g.severity.value == "CRITICAL")
+        if critical_gaps > 0:
+            paragraph_two_parts.append(
+                f"{critical_gaps} critical data gap(s) limit direct confirmation of the leading explanation."
+            )
+        elif len(result.gaps) > 0:
+            paragraph_two_parts.append(
+                f"{len(result.gaps)} data gap(s) were identified that limit confidence."
+            )
 
     summary = [paragraph_one]
     if paragraph_two_parts:
@@ -165,8 +197,47 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
     return summary
 
 
+def _deduplicate_relationship_entries(
+    entries: list[dict],
+    max_per_hypothesis: int = 6,
+) -> list[dict]:
+    """
+    Deduplicate and limit entries per hypothesis to produce concise evidence bullets.
+
+    Priority order within each hypothesis: contradicting > weakening > supporting > indeterminate.
+    Entries with near-identical evidence text (first 70 chars) are collapsed to one.
+    """
+    _priority = {
+        AlignmentLabel.CONTRADICTING.value: 0,
+        AlignmentLabel.WEAKENING.value: 1,
+        AlignmentLabel.SUPPORTING.value: 2,
+        AlignmentLabel.INDETERMINATE.value: 3,
+    }
+
+    by_hypothesis: dict[str, list[dict]] = {}
+    for entry in entries:
+        by_hypothesis.setdefault(entry["hypothesis_id"], []).append(entry)
+
+    result: list[dict] = []
+    for hyp_entries in by_hypothesis.values():
+        sorted_entries = sorted(
+            hyp_entries,
+            key=lambda e: (_priority.get(e["tag"], 9), e["source"]),
+        )
+        seen_prefixes: set[str] = set()
+        deduped: list[dict] = []
+        for entry in sorted_entries:
+            prefix = entry["evidence"][:70].lower().strip()
+            if prefix not in seen_prefixes:
+                seen_prefixes.add(prefix)
+                deduped.append(entry)
+        result.extend(deduped[:max_per_hypothesis])
+
+    return result
+
+
 def _build_relationship_entries(result: AnalysisResult) -> list[dict]:
-    """Build the explicit evidence classification table."""
+    """Build the explicit evidence classification table, deduplicated to 4–8 items per hypothesis."""
     evidence_map = {evidence.id: evidence for evidence in result.evidence_elements}
     hypothesis_map = {hypothesis.id: hypothesis for hypothesis in result.hypotheses}
     entries: list[dict] = []
@@ -188,7 +259,7 @@ def _build_relationship_entries(result: AnalysisResult) -> list[dict]:
             }
         )
 
-    return entries
+    return _deduplicate_relationship_entries(entries)
 
 
 def _build_contradiction_log(relationship_entries: list[dict]) -> list[dict]:
@@ -419,10 +490,12 @@ def generate_report(
 
     _validate_result_against_current_input(result, reasoning_artifact)
 
-    hypothesis_lines = [
-        f"{item['rank']}: {item['name']} (gap severity={item['gap_severity']}) - {item['description']}"
-        for item in ranked_hypotheses
-    ]
+    hypothesis_lines = []
+    for item in ranked_hypotheses:
+        gap_note = " [data gaps present]" if item["gap_severity"] > 0 else ""
+        hypothesis_lines.append(
+            f"{item['rank']}: {item['name']}{gap_note} — {item['description']}"
+        )
 
     sections = [
         ReportSection(
