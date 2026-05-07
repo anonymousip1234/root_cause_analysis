@@ -134,6 +134,47 @@ def _count_pattern_hits(text: str, patterns: tuple[str, ...]) -> list[str]:
     return sorted(set(matches))
 
 
+# Phrases that globally assert a normal / acceptable state — when matched
+# alongside any hypothesis domain term, they constitute a contradiction even if
+# no specific expected condition is directly named in the statement.
+_GLOBAL_NORMAL_PHRASES: tuple[str, ...] = (
+    "all measurements within",
+    "all parameters within",
+    "all values within",
+    "all readings within",
+    "all within specification",
+    "all within spec",
+    "all within limits",
+    "all within control",
+    "no issues found",
+    "no issues identified",
+    "no problems found",
+    "no problems identified",
+    "no abnormalities",
+    "no abnormality detected",
+    "no defects found",
+    "no defects detected",
+    "no deviations found",
+    "no deviations detected",
+    "no evidence of",
+    "system normal",
+    "process normal",
+    "everything normal",
+    "everything within",
+    "within normal limits",
+    "within normal range",
+    "nothing unusual",
+    "no concerns",
+    "all acceptable",
+)
+
+
+def _is_global_normal_statement(statement: str) -> bool:
+    """Return True when the statement globally asserts a normal / acceptable state."""
+    norm = _normalize_text(statement)
+    return any(_contains_phrase(norm, phrase) for phrase in _GLOBAL_NORMAL_PHRASES)
+
+
 def _group_contradicting_patterns(hypothesis: Hypothesis) -> tuple[str, ...]:
     """Return contradicting patterns specific to this hypothesis's signal group."""
     groups = _get_signal_groups()
@@ -247,6 +288,14 @@ def _score_expected_vs_observed(
         return confirming, negating, domain_only
 
     for stmt in statements:
+        # Global normal-state statements (e.g., "all measurements within specification",
+        # "no issues found") are sweeping assertions that negate every expected anomalous
+        # condition. Since classify_alignment is only called for already-associated evidence,
+        # domain relevance is already established — apply the negation unconditionally.
+        if _is_global_normal_statement(stmt):
+            negating += 1
+            continue
+
         stmt_confirming = 0
         stmt_negating = 0
         stmt_domain = 0
@@ -270,7 +319,6 @@ def _score_expected_vs_observed(
             confirming += 1
             negating += 1
         elif stmt_domain > 0:
-            # Domain-relevant but no clear state signal
             if _matched_terms(stmt, hypothesis_terms):
                 domain_only += 1
         else:

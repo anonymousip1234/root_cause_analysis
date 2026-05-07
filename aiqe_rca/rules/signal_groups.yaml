@@ -252,3 +252,92 @@ signal_groups:
       - maintenance overdue
       - mechanical wear evidence
       - press malfunction recorded
+
+  - id: SG_OPERATOR_PROCESS_VARIATION
+    name: "operator or manual process variation that may be introducing inconsistency"
+    signals:
+      - operator
+      - operator dependent
+      - manual step
+      - manual operation
+      - operator error
+      - operator variation
+      - operator instruction
+      - training gap
+      - skill variation
+      - procedure not followed
+      - inconsistent application
+      - human factor
+      - shift variation
+      - shift dependent
+    contradicting_signals:
+      - operator training verified
+      - procedure consistently followed
+      - automated step
+      - no operator variation identified
+    expected_conditions:
+      - operator dependent outcome
+      - manual step inconsistency
+      - shift to shift variation
+      - training gap confirmed
+      - procedure deviation observed
+      - inconsistent application detected
+      - operator specific pattern
+
+  - id: SG_MATERIAL_BATCH_VARIATION
+    name: "material or incoming batch variation that may be contributing to the observed pattern"
+    signals:
+      - material
+      - batch
+      - lot
+      - lot variation
+      - incoming material
+      - supplier
+      - raw material
+      - material property
+      - certificate of conformance
+      - incoming inspection
+      - shelf life
+      - batch to batch
+      - material variability
+      - resin
+      - substrate
+    contradicting_signals:
+      - material certified
+      - incoming inspection passed
+      - no lot variation identified
+      - material within specification
+    expected_conditions:
+      - lot to lot variation observed
+      - incoming material deviation
+      - batch specific occurrence
+      - material property out of range
+      - supplier certificate deviation
+      - shelf life exceedance
+      - substrate condition variation
+
+  - id: SG_COMPOUNDING_MULTI_FACTOR
+    name: "compounding multi-factor interaction where two or more contributors may be co-active"
+    signals:
+      - multiple factors
+      - combined effect
+      - interaction
+      - stack-up
+      - compounding
+      - simultaneous
+      - co-occurring
+      - no single cause
+      - combination of
+      - both conditions
+      - when combined
+      - overlapping
+    contradicting_signals:
+      - single root cause confirmed
+      - isolated to one factor
+    expected_conditions:
+      - multiple conditions co-active
+      - compounding effect observed
+      - interaction between factors
+      - no single dominant cause
+      - stack up of contributors
+      - simultaneous occurrence pattern

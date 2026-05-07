@@ -9,6 +9,7 @@ Same inputs always produce the same output.
 from aiqe_rca.engine.alignment_classifier import classify_all_alignments
 from aiqe_rca.engine.confidence import assess_confidence
 from aiqe_rca.engine.evidence_associator import associate_evidence
+from aiqe_rca.engine.evidence_categorizer import categorize_evidence, enrich_image_evidence
 from aiqe_rca.engine.gap_detector import detect_gaps
 from aiqe_rca.engine.hypothesis_builder import build_hypotheses
 from aiqe_rca.engine.ranker import rank_hypotheses
@@ -94,8 +95,20 @@ def run_analysis(
     # Step 1: Parse all documents into evidence elements
     evidence_elements = parse_multiple_files(files)
 
+    # Step 1b: Categorize evidence (DR/PC/PV/DA/RC/UN) based on filename + text patterns.
+    # Must run before classification so the PFMEA/Control Plan gate works correctly.
+    evidence_elements = categorize_evidence(evidence_elements)
+
     # Step 2: Build candidate hypotheses (2–4, rule-based)
     hypotheses = build_hypotheses(problem_statement, evidence_elements)
+
+    # Step 2b: Enrich image evidence fallback text with matched hypothesis signal keywords.
+    # Runs after hypothesis building so hypothesis keywords are available, before association
+    # so the enriched text can influence keyword overlap scores.
+    all_keywords: list[str] = sorted(
+        {kw for hypothesis in hypotheses for kw in hypothesis.keywords}
+    )
+    evidence_elements = enrich_image_evidence(evidence_elements, all_keywords)
 
     # Step 3: Associate evidence to hypotheses (keyword + embedding)
     hypotheses = associate_evidence(hypotheses, evidence_elements)

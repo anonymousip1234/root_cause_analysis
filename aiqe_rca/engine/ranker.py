@@ -97,6 +97,8 @@ def rank_hypotheses(
         ),
     )
 
+    # Rule 1: A contradicted hypothesis cannot be PRIMARY when a non-contradicted
+    # alternative exists.
     non_contradicted = [
         hypothesis
         for hypothesis in ranked
@@ -106,6 +108,20 @@ def rank_hypotheses(
         primary = non_contradicted[0]
         remaining = [hypothesis for hypothesis in ranked if hypothesis.id != primary.id]
         ranked = [primary] + remaining
+
+    # Rule 2: A hypothesis with zero supporting evidence cannot be PRIMARY when
+    # at least one alternative has one or more supporting alignments.
+    has_any_supported = any(
+        counts_by_hypothesis[hypothesis.id][0] > 0 for hypothesis in ranked
+    )
+    if has_any_supported and counts_by_hypothesis[ranked[0].id][0] == 0:
+        # Promote the best-scored hypothesis that actually has support
+        supported_candidates = [
+            h for h in ranked if counts_by_hypothesis[h.id][0] > 0
+        ]
+        if supported_candidates:
+            new_primary = supported_candidates[0]
+            ranked = [new_primary] + [h for h in ranked if h.id != new_primary.id]
 
     secondary_assigned = False
     for index, hypothesis in enumerate(ranked):
