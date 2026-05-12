@@ -374,17 +374,62 @@ def _build_action_items(result: AnalysisResult, contradiction_log: list[dict], g
 
 
 def _build_confidence_statement(result: AnalysisResult) -> str:
-    """Explain the assigned confidence level."""
+    """Explain the assigned confidence level.
+
+    Report guardrail (v3 spec Section 14): must never state 'no contradictions'
+    when contradiction objects exist anywhere in the run.
+    """
+    any_contradictions = any(
+        a.classification == AlignmentLabel.CONTRADICTING for a in result.alignments
+    )
+    any_gaps = bool(result.gaps)
+
     if result.confidence.value == "High":
+        # Additional guardrail: High confidence with contradictions is a spec violation.
+        # Downgrade the statement if contradictions were found (even if confidence
+        # was assessed as High due to primary-only scoping).
+        if any_contradictions:
+            return (
+                "Confidence is Medium. Although the leading hypothesis has strong direct "
+                "support, contradictory findings were identified for other hypotheses that "
+                "limit overall certainty."
+            )
         return (
-            "Confidence is High because the leading hypothesis has direct support, no contradictions, and no material data gaps."
+            "Confidence is High because the leading hypothesis has direct support, "
+            "no contradictions were identified, and no material data gaps remain."
         )
+
     if result.confidence.value == "Medium":
-        return (
-            "Confidence is Medium because the ranking is directionally clear, but explicit gaps or indirect evidence still limit direct confirmation."
-        )
+        parts: list[str] = [
+            "Confidence is Medium because the ranking is directionally clear"
+        ]
+        if any_contradictions:
+            parts.append("contradictory evidence was identified and limits certainty")
+        if any_gaps:
+            parts.append("data gaps remain that prevent direct confirmation")
+        if not any_contradictions and not any_gaps:
+            parts.append("indirect evidence still limits full confirmation")
+        return ", ".join(parts[:1]) + " — " + " and ".join(parts[1:]) + "."
+
+    # Low confidence
+    primary = next(
+        (h for h in result.hypotheses if h.rank_label == RankLabel.PRIMARY), None
+    )
+    if primary is not None:
+        primary_counts = _count_by_label(result.alignments, primary.id)
+        if primary_counts["supporting"] == 0:
+            return (
+                "Confidence is Low because the leading hypothesis has no direct "
+                "observation support from the current input package."
+            )
+        if primary_counts["contradictory"] > 0:
+            return (
+                "Confidence is Low because the leading hypothesis carries unresolved "
+                "contradictions that were not overcome by supporting evidence."
+            )
     return (
-        "Confidence is Low because the current input does not provide enough direct support to separate the remaining hypotheses cleanly."
+        "Confidence is Low because the current input does not provide enough direct "
+        "support to separate the remaining hypotheses cleanly."
     )
 
 

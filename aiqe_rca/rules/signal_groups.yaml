@@ -341,3 +341,57 @@ signal_groups:
       - no single dominant cause
       - stack up of contributors
       - simultaneous occurrence pattern
+
+  - id: SG_CUMULATIVE_STACKUP
+    name: "cumulative stack-up or multi-variable interaction where individually acceptable conditions combine to produce failure"
+    signals:
+      - variables within spec
+      - no single variable
+      - no single press
+      - no single machine
+      - multiple variables
+      - stack-up
+      - cumulative
+      - tolerance
+      - interaction effect
+      - after assembly
+      - after integration
+      - after cycling
+      - no single cause
+      - no clear correlation
+      - intermittent across
+    contradicting_signals:
+      - single variable isolated
+      - single root cause confirmed
+      - one machine correlation confirmed
+    expected_conditions:
+      - intermittent failures with no single machine correlation
+      - failures detected after assembly or integration
+      - pattern observed across multiple machines and shifts
+      - no single press or operator isolates the defect
+      - variables near tolerance limits contributing combined
+
+  - id: SG_TEMPORAL_DEGRADATION
+    name: "temporal or end-of-run degradation that may be driving a progressive failure pattern"
+    signals:
+      - end of run
+      - tool life
+      - end of tool life
+      - near end
+      - last parts
+      - degradation over time
+      - wear over time
+      - run length
+      - after many cycles
+      - progressive
+      - over time
+      - as tool aged
+    contradicting_signals:
+      - no tool life correlation
+      - uniform across run
+      - no degradation trend
+    expected_conditions:
+      - failure rate increases toward end of run
+      - tool wear trend correlates with defect rate
+      - degradation observed over production run
+      - last parts in run show higher defect rate

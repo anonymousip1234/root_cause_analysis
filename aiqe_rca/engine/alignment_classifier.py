@@ -22,6 +22,7 @@ import re
 import yaml
 
 from aiqe_rca.config import settings
+from aiqe_rca.engine.pattern_facts import INTERACTION_TEMPLATE_IDS
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.evidence import EvidenceCategory, EvidenceElement
 from aiqe_rca.models.hypothesis import Hypothesis
@@ -212,7 +213,19 @@ def _score_expected_observable(statement: str, condition: str) -> str:
         return "absent"
 
     stmt_token_set = set(_tokenize(norm_stmt))
-    matched = [t for t in condition_tokens if t in stmt_token_set]
+
+    # Exact + prefix-stem matching (handles "failures" ↔ "failure", "detected" ↔ "detect").
+    # Only apply stem matching for tokens ≥ 5 chars to avoid false positives.
+    matched: list[str] = []
+    for ct in condition_tokens:
+        if ct in stmt_token_set:
+            matched.append(ct)
+        elif len(ct) >= 5 and any(
+            (st.startswith(ct[:5]) or ct.startswith(st[:5]))
+            for st in stmt_token_set
+            if len(st) >= 5
+        ):
+            matched.append(ct)
 
     if not matched:
         return "absent"
@@ -436,6 +449,34 @@ def classify_alignment(
             evidence_id=evidence.id,
             classification=label,
             rationale=_build_rationale(label, hypothesis, [], [], list(contra_hits)),
+        )
+
+    # --- Interaction / stack-up hypothesis special path ---
+    # For CUMULATIVE_STACKUP, COMPOUNDING_MULTI_FACTOR, and similar interaction
+    # hypotheses, the "positive signals" are domain keywords (no single machine,
+    # intermittent, across multiple) rather than anomaly-state tokens.
+    # Using the standard expected-vs-observed approach produces false negations
+    # because "no single press" is CONFIRMING for these hypotheses, not negating.
+    # We use keyword presence as the primary classification signal here.
+    if hypothesis.template_id in INTERACTION_TEMPLATE_IDS:
+        term_hits = _matched_terms(norm_text, hypothesis_terms)
+        if contra_hits:
+            label = AlignmentLabel.CONTRADICTING
+            rationale = _build_rationale(AlignmentLabel.CONTRADICTING, hypothesis, [], [], list(contra_hits))
+        elif term_hits:
+            label = AlignmentLabel.SUPPORTING
+            rationale = (
+                f"Observed evidence contains domain signals consistent with "
+                f"{hypothesis.process_step or hypothesis.id}: {', '.join(sorted(term_hits)[:3])}."
+            )
+        else:
+            label = AlignmentLabel.INDETERMINATE
+            rationale = "Evidence mentions related context but domain signals for this interaction hypothesis were not found."
+        return AlignmentResult(
+            hypothesis_id=hypothesis.id,
+            evidence_id=evidence.id,
+            classification=label,
+            rationale=rationale,
         )
 
     # Score evidence against expected conditions (expected-vs-observed core logic)

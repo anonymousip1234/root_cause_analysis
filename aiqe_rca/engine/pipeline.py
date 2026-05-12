@@ -1,21 +1,90 @@
 """Pipeline orchestrator — runs the full deterministic analysis flow.
 
-Chains: parse → build hypotheses → associate evidence → classify alignments →
-        detect gaps → rank → assess confidence → return AnalysisResult
+v3 Architecture (per AIQE Phase 2 Developer Implementation Spec v3):
 
-Same inputs always produce the same output.
+  parse → categorize → [SOURCE ROLE GATE] → build hypotheses
+       → pattern facts → merge pattern-triggered hypotheses
+       → [OBSERVATION-ONLY] associate evidence
+       → [OBSERVATION-ONLY] classify alignments
+       → detect gaps → rank → assess confidence → report
+
+Critical invariant: PFMEA, Control Plan, and any other EXPECTATION-role source
+(DR / PC category) MUST NOT enter the evidence association or classification steps.
+"If PFMEA or Control Plan appears in evidence output, Phase 2 fails."
+(v3 spec Section 5 and Section 14)
 """
 
+import re
+
+from aiqe_rca.config import settings
 from aiqe_rca.engine.alignment_classifier import classify_all_alignments
 from aiqe_rca.engine.confidence import assess_confidence
 from aiqe_rca.engine.evidence_associator import associate_evidence
 from aiqe_rca.engine.evidence_categorizer import categorize_evidence, enrich_image_evidence
 from aiqe_rca.engine.gap_detector import detect_gaps
 from aiqe_rca.engine.hypothesis_builder import build_hypotheses
+from aiqe_rca.engine.pattern_facts import (
+    build_pattern_facts,
+    generate_pattern_hypotheses,
+    INTERACTION_TEMPLATE_IDS,
+)
 from aiqe_rca.engine.ranker import rank_hypotheses
-from aiqe_rca.models.evidence import EvidenceElement
+from aiqe_rca.models.evidence import EvidenceCategory, EvidenceElement
+from aiqe_rca.models.hypothesis import Hypothesis, RankLabel
 from aiqe_rca.models.report import AnalysisResult, ConfidenceLevel, ReportHeader
 from aiqe_rca.parser.router import parse_multiple_files
+
+
+# Source categories that represent expectation / design intent documents.
+# These must never enter the evidence reasoning pipeline.
+_EXPECTATION_CATEGORIES: frozenset[EvidenceCategory] = frozenset({
+    EvidenceCategory.DESIGN_REQUIREMENTS,   # PFMEA, DFMEA, engineering specs
+    EvidenceCategory.PROCESS_CONTROL,       # Control plan, work instructions, SOPs
+})
+
+
+def _filter_observation_evidence(
+    evidence_elements: list[EvidenceElement],
+) -> list[EvidenceElement]:
+    """Return only observation-role evidence (DR/PC are excluded).
+
+    This is the hard source role gate mandated by v3 spec Section 5.
+    Expectation sources (PFMEA, Control Plan) describe what SHOULD happen;
+    they cannot confirm, weaken, or contradict what WAS observed.
+    """
+    return [e for e in evidence_elements if e.category not in _EXPECTATION_CATEGORIES]
+
+
+def _merge_hypotheses(
+    signal_group_hypotheses: list[Hypothesis],
+    pattern_hypotheses: list[Hypothesis],
+    max_hypotheses: int,
+) -> list[Hypothesis]:
+    """Merge pattern-triggered and signal-group hypotheses into a ranked-capped list.
+
+    Pattern-triggered hypotheses take priority slots (v3 spec Section 7).
+    Signal-group hypotheses fill remaining slots, skipping duplicates.
+    All IDs are renumbered deterministically.
+    """
+    # Collect template IDs already covered by pattern hypotheses
+    seen_template_ids = {h.template_id for h in pattern_hypotheses if h.template_id}
+
+    # Add signal-group hypotheses that don't duplicate pattern hypothesis templates
+    additional: list[Hypothesis] = []
+    for h in signal_group_hypotheses:
+        if h.template_id in seen_template_ids:
+            continue
+        additional.append(h)
+        if len(pattern_hypotheses) + len(additional) >= max_hypotheses:
+            break
+
+    merged = pattern_hypotheses + additional
+
+    # Renumber IDs deterministically (H1, H2, ...)
+    for index, hypothesis in enumerate(merged, start=1):
+        hypothesis.id = f"H{index}"
+
+    return merged[:max_hypotheses]
 
 
 def _extract_header_fields(
@@ -23,16 +92,9 @@ def _extract_header_fields(
     evidence_elements: list[EvidenceElement],
     confidence: ConfidenceLevel,
 ) -> ReportHeader:
-    """Extract report header fields from inputs.
-
-    Attempts to infer Part/Process, Defect/Symptom, and Date Range from the
-    problem statement and evidence. Falls back to standard defaults.
-    """
+    """Extract report header fields from inputs."""
     header = ReportHeader(analysis_confidence=confidence)
 
-    import re
-
-    # Part/Process — extract from evidence (look for "Part:" fields)
     part_pattern = r"(?:Part|Product|Component|Assembly)[:\s]+([^\n;]{5,80})"
     for e in evidence_elements:
         match = re.search(part_pattern, e.text_content, re.IGNORECASE)
@@ -40,41 +102,33 @@ def _extract_header_fields(
             header.part_process = match.group(1).strip()
             break
 
-    # Also try problem statement for part references
     if header.part_process == "Not available from current inputs.":
         ps_match = re.search(part_pattern, problem_statement, re.IGNORECASE)
         if ps_match:
             header.part_process = ps_match.group(1).strip()
 
-    # Defect/Symptom — use problem statement first sentence (clean)
     if problem_statement.strip():
         first_sentence = problem_statement.split(".")[0].strip()
         if len(first_sentence) > 150:
             first_sentence = first_sentence[:150] + "..."
         header.defect_symptom = first_sentence
 
-    # Date range — look for date patterns in evidence
-    import re
-
     date_pattern = r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b"
     dates_found: list[str] = []
     for e in evidence_elements:
-        matches = re.findall(date_pattern, e.text_content)
-        dates_found.extend(matches)
+        dates_found.extend(re.findall(date_pattern, e.text_content))
     if len(dates_found) >= 2:
         dates_found.sort()
         header.date_range = f"{dates_found[0]} to {dates_found[-1]}"
     elif len(dates_found) == 1:
         header.date_range = dates_found[0]
 
-    # Also check problem statement for dates
     ps_dates = re.findall(date_pattern, problem_statement)
     if ps_dates and header.date_range == "Not available from current inputs.":
         ps_dates.sort()
-        if len(ps_dates) >= 2:
-            header.date_range = f"{ps_dates[0]} to {ps_dates[-1]}"
-        else:
-            header.date_range = ps_dates[0]
+        header.date_range = (
+            f"{ps_dates[0]} to {ps_dates[-1]}" if len(ps_dates) >= 2 else ps_dates[0]
+        )
 
     return header
 
@@ -83,7 +137,7 @@ def run_analysis(
     problem_statement: str,
     files: dict[str, bytes],
 ) -> AnalysisResult:
-    """Run the full deterministic RCA pipeline.
+    """Run the full deterministic v3 RCA pipeline.
 
     Args:
         problem_statement: User-provided problem description.
@@ -92,50 +146,116 @@ def run_analysis(
     Returns:
         Complete AnalysisResult ready for report generation.
     """
-    # Step 1: Parse all documents into evidence elements
+    # -----------------------------------------------------------------------
+    # Step 1 — Parse all documents into evidence elements
+    # -----------------------------------------------------------------------
     evidence_elements = parse_multiple_files(files)
 
-    # Step 1b: Categorize evidence (DR/PC/PV/DA/RC/UN) based on filename + text patterns.
-    # Must run before classification so the PFMEA/Control Plan gate works correctly.
+    # -----------------------------------------------------------------------
+    # Step 1b — Categorize evidence (DR/PC/PV/DA/RC/UN)
+    # Must run before the source role gate so PFMEA/CP are identified.
+    # -----------------------------------------------------------------------
     evidence_elements = categorize_evidence(evidence_elements)
 
-    # Step 2: Build candidate hypotheses (2–4, rule-based)
-    hypotheses = build_hypotheses(problem_statement, evidence_elements)
+    # -----------------------------------------------------------------------
+    # SOURCE ROLE GATE — separate EXPECTATION from OBSERVATION sources.
+    # PFMEA and Control Plan documents are expectation sources; they define
+    # what *should* happen. Only observation evidence may enter the reasoning
+    # pipeline (association, classification, gap detection).
+    # -----------------------------------------------------------------------
+    observation_evidence = _filter_observation_evidence(evidence_elements)
 
-    # Step 2b: Enrich image evidence fallback text with matched hypothesis signal keywords.
-    # Runs after hypothesis building so hypothesis keywords are available, before association
-    # so the enriched text can influence keyword overlap scores.
+    # -----------------------------------------------------------------------
+    # Step 2 — Build signal-group hypotheses.
+    # Uses ALL evidence (including PFMEA/CP) for signal matching so that
+    # hypothesis domains reflect what the input package describes.
+    # -----------------------------------------------------------------------
+    signal_hypotheses = build_hypotheses(problem_statement, evidence_elements)
+
+    # -----------------------------------------------------------------------
+    # Step 2b — Build pattern facts from OBSERVATION evidence only.
+    # Pattern facts detect higher-level patterns (INTERMITTENT_FAILURE,
+    # NO_SINGLE_VARIABLE_SEPARATION, etc.) that trigger stack-up / temporal /
+    # detection-gap hypotheses (v3 spec Section 6 & 7).
+    # -----------------------------------------------------------------------
+    pattern_facts = build_pattern_facts(observation_evidence)
+    pattern_hypotheses = generate_pattern_hypotheses(pattern_facts)
+
+    # -----------------------------------------------------------------------
+    # Step 2c — Merge pattern-triggered and signal-group hypotheses.
+    # Pattern hypotheses take priority; signal-group hypotheses fill remaining
+    # slots up to max_hypotheses (v3 spec Section 7).
+    # -----------------------------------------------------------------------
+    max_h = settings.max_hypotheses
+    min_h = settings.min_hypotheses
+    hypotheses = _merge_hypotheses(signal_hypotheses, pattern_hypotheses, max_h)
+
+    # Pad to minimum if needed (rare edge case)
+    if len(hypotheses) < min_h and len(signal_hypotheses) > len(hypotheses):
+        seen = {h.template_id for h in hypotheses}
+        for h in signal_hypotheses:
+            if h.template_id not in seen:
+                hypotheses.append(h)
+                seen.add(h.template_id)
+            if len(hypotheses) >= min_h:
+                break
+        for i, h in enumerate(hypotheses, start=1):
+            h.id = f"H{i}"
+
+    # -----------------------------------------------------------------------
+    # Step 2d — Enrich image evidence using hypothesis keyword vocabulary.
+    # Must run after hypothesis building (keywords available) and before
+    # association (enriched text improves overlap scores).
+    # -----------------------------------------------------------------------
     all_keywords: list[str] = sorted(
-        {kw for hypothesis in hypotheses for kw in hypothesis.keywords}
+        {kw for h in hypotheses for kw in h.keywords}
     )
     evidence_elements = enrich_image_evidence(evidence_elements, all_keywords)
+    # Re-sync observation_evidence list after enrichment (image elements are shared objects)
+    observation_evidence = _filter_observation_evidence(evidence_elements)
 
-    # Step 3: Associate evidence to hypotheses (keyword + embedding)
-    hypotheses = associate_evidence(hypotheses, evidence_elements)
+    # -----------------------------------------------------------------------
+    # Step 3 — Associate evidence to hypotheses.
+    # ONLY observation evidence is passed — EXPECTATION sources are excluded.
+    # -----------------------------------------------------------------------
+    hypotheses = associate_evidence(hypotheses, observation_evidence)
 
-    # Step 4: Classify alignment for all associated pairs
-    alignments = classify_all_alignments(hypotheses, evidence_elements)
+    # -----------------------------------------------------------------------
+    # Step 4 — Classify alignment for all associated pairs.
+    # ONLY observation evidence is passed.
+    # -----------------------------------------------------------------------
+    alignments = classify_all_alignments(hypotheses, observation_evidence)
 
     # Preserve the candidate list before prioritization for reasoning artifacts.
     pre_ranking_hypotheses = [h.model_copy(deep=True) for h in hypotheses]
 
-    # Step 5: Detect data gaps
-    gaps = detect_gaps(evidence_elements, hypotheses, alignments)
+    # -----------------------------------------------------------------------
+    # Step 5 — Detect data gaps from observation evidence.
+    # -----------------------------------------------------------------------
+    gaps = detect_gaps(observation_evidence, hypotheses, alignments)
 
-    # Step 6: Rank hypotheses (Primary / Secondary / Conditional Amplifier)
-    hypotheses = rank_hypotheses(hypotheses, alignments, gaps)
+    # -----------------------------------------------------------------------
+    # Step 6 — Rank hypotheses.
+    # Pattern facts are passed so the ranker can apply interaction influence
+    # rules (stack-up hypotheses get tier-0 priority when they have support).
+    # -----------------------------------------------------------------------
+    hypotheses = rank_hypotheses(hypotheses, alignments, gaps, pattern_facts=pattern_facts)
 
-    # Step 7: Assess overall confidence (Low / Medium / High)
+    # -----------------------------------------------------------------------
+    # Step 7 — Assess overall confidence.
+    # -----------------------------------------------------------------------
     confidence = assess_confidence(hypotheses, alignments, gaps)
 
-    # Step 8: Extract header fields
+    # -----------------------------------------------------------------------
+    # Step 8 — Extract header fields.
+    # -----------------------------------------------------------------------
     header = _extract_header_fields(problem_statement, evidence_elements, confidence)
 
     return AnalysisResult(
-        evidence_elements=evidence_elements,
+        evidence_elements=evidence_elements,      # ALL elements (for tracing)
         pre_ranking_hypotheses=pre_ranking_hypotheses,
         hypotheses=hypotheses,
-        alignments=alignments,
+        alignments=alignments,                    # OBSERVATION-ONLY alignments
         gaps=gaps,
         confidence=confidence,
         header=header,
