@@ -29,9 +29,15 @@ from aiqe_rca.engine.pattern_facts import (
     INTERACTION_TEMPLATE_IDS,
 )
 from aiqe_rca.engine.ranker import rank_hypotheses
-from aiqe_rca.models.evidence import EvidenceCategory, EvidenceElement
+from aiqe_rca.models.evidence import EvidenceCategory, EvidenceElement, SourceType
 from aiqe_rca.models.hypothesis import Hypothesis, RankLabel
-from aiqe_rca.models.report import AnalysisResult, ConfidenceLevel, ReportHeader
+from aiqe_rca.models.report import (
+    AnalysisResult,
+    ConfidenceLevel,
+    ImageStatus,
+    ReportHeader,
+    SourceRoleAuditEntry,
+)
 from aiqe_rca.parser.router import parse_multiple_files
 
 
@@ -41,6 +47,85 @@ _EXPECTATION_CATEGORIES: frozenset[EvidenceCategory] = frozenset({
     EvidenceCategory.DESIGN_REQUIREMENTS,   # PFMEA, DFMEA, engineering specs
     EvidenceCategory.PROCESS_CONTROL,       # Control plan, work instructions, SOPs
 })
+
+
+def _build_source_role_audit(
+    all_evidence: list[EvidenceElement],
+    observation_ids: set[str],
+) -> list[SourceRoleAuditEntry]:
+    """AG-1 Rev-C: one audit entry per source file proving the gate was applied."""
+    by_source: dict[str, SourceRoleAuditEntry] = {}
+    for e in all_evidence:
+        if e.source not in by_source:
+            is_obs = e.id in observation_ids
+            if is_obs:
+                role: str = "OBSERVATION"
+            elif e.category in _EXPECTATION_CATEGORIES:
+                role = "EXPECTATION"
+            else:
+                role = "CONTEXT"
+            by_source[e.source] = SourceRoleAuditEntry(
+                filename=e.source,
+                source_role=role,
+                created_evidence_items=0,
+                evidence_creation_allowed=is_obs,
+            )
+        if e.id in observation_ids:
+            by_source[e.source].created_evidence_items += 1
+    return list(by_source.values())
+
+
+def _build_image_statuses(
+    all_evidence: list[EvidenceElement],
+    file_keys: list[str],
+) -> list[ImageStatus]:
+    """AG-8 Rev-C: explicit status for every uploaded image — never SILENT."""
+    image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
+    image_files = [
+        k for k in file_keys
+        if any(k.lower().endswith(ext) for ext in image_extensions)
+    ]
+    if not image_files:
+        return []
+
+    # Group evidence by source
+    by_source: dict[str, list[EvidenceElement]] = {}
+    for e in all_evidence:
+        if e.source_type == SourceType.IMAGE:
+            by_source.setdefault(e.source, []).append(e)
+
+    statuses: list[ImageStatus] = []
+    for filename in image_files:
+        elements = by_source.get(filename, [])
+        if not elements:
+            statuses.append(ImageStatus(
+                filename=filename,
+                status="FAIL",
+                reason="Image was uploaded but no evidence element was created — possible parse failure.",
+            ))
+            continue
+
+        is_real_ocr = any(
+            (e.page_ref or "").startswith("OCR extraction") for e in elements
+        )
+        if is_real_ocr:
+            statuses.append(ImageStatus(
+                filename=filename,
+                status="CONTRIBUTORY",
+                reason="OCR text extracted and entered evidence graph.",
+                created_evidence_item_ids=[e.id for e in elements],
+            ))
+        else:
+            statuses.append(ImageStatus(
+                filename=filename,
+                status="NON_CONTRIBUTORY",
+                reason=(
+                    "Image was processed. No reliable OCR text extracted; "
+                    "filename-derived signals included in evidence graph where possible."
+                ),
+                created_evidence_item_ids=[e.id for e in elements],
+            ))
+    return statuses
 
 
 def _filter_observation_evidence(
@@ -136,6 +221,7 @@ def _extract_header_fields(
 def run_analysis(
     problem_statement: str,
     files: dict[str, bytes],
+    _file_keys: list[str] | None = None,
 ) -> AnalysisResult:
     """Run the full deterministic v3 RCA pipeline.
 
@@ -251,6 +337,20 @@ def run_analysis(
     # -----------------------------------------------------------------------
     header = _extract_header_fields(problem_statement, evidence_elements, confidence)
 
+    # -----------------------------------------------------------------------
+    # Step 9 — Build audit objects (AG-1 source role proof, AG-8 image status)
+    # -----------------------------------------------------------------------
+    obs_ids = {e.id for e in observation_evidence}
+    source_role_audit = _build_source_role_audit(evidence_elements, obs_ids)
+    image_statuses = _build_image_statuses(evidence_elements, _file_keys or sorted(files.keys()))
+
+    # Determine ranking mode for AG-3 transparency
+    ranking_mode = (
+        "UNRESOLVED_COMPETING_HYPOTHESES"
+        if all(h.rank_label == RankLabel.UNRESOLVED for h in hypotheses)
+        else "PROMOTED_PRIMARY"
+    )
+
     return AnalysisResult(
         evidence_elements=evidence_elements,      # ALL elements (for tracing)
         pre_ranking_hypotheses=pre_ranking_hypotheses,
@@ -260,4 +360,7 @@ def run_analysis(
         confidence=confidence,
         header=header,
         problem_statement=problem_statement,
+        ranking_mode=ranking_mode,
+        source_role_audit=source_role_audit,
+        image_statuses=image_statuses,
     )

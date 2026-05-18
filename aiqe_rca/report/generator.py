@@ -24,6 +24,7 @@ _RANK_DISPLAY = {
     RankLabel.CONDITIONAL_AMPLIFIER: "Conditional Amplifier",
     RankLabel.DEPRIORITIZED: "Deprioritized Alternative",
     RankLabel.UNRANKED: "Unranked",
+    RankLabel.UNRESOLVED: "Unresolved Competing Hypothesis",
 }
 
 _ALLOWED_TAGS = {
@@ -133,6 +134,19 @@ def _build_executive_summary(result: AnalysisResult) -> list[str]:
     """Build a concise, engineer-readable executive summary."""
     if not result.hypotheses:
         return [FALLBACKS["summary"]]
+
+    # AG-3 Rev-C: all-unsupported fallback language (exact wording required)
+    if all(h.rank_label == RankLabel.UNRESOLVED for h in result.hypotheses):
+        return [
+            "Unresolved Competing Hypotheses",
+            (
+                "No hypothesis currently meets the minimum direct observation support "
+                "required for promotion to Primary Contributor. "
+                "The current evidence supports multiple plausible mechanisms but does "
+                "not directly confirm any one mechanism. "
+                "Confidence is LOW pending additional observation-derived evidence."
+            ),
+        ]
 
     primary = next((item for item in result.hypotheses if item.rank_label == RankLabel.PRIMARY), None)
     secondary = next((item for item in result.hypotheses if item.rank_label == RankLabel.SECONDARY), None)
@@ -449,19 +463,25 @@ def _validate_result_against_current_input(
     )
 
     errors: list[str] = []
-    for hypothesis in result.pre_ranking_hypotheses + result.hypotheses:
-        process_name = hypothesis.process_step or ""
-        if not process_name:
-            continue
-        keyword_hit = any(
-            _contains_phrase(current_input_text, keyword)
-            or _tokens_in_text(current_input_text, keyword)
-            for keyword in hypothesis.keywords
-        )
-        if not keyword_hit:
-            errors.append(
-                f"Hypothesis signals are not traceable to current input: {process_name}"
+    # In UNRESOLVED mode all hypotheses are structural placeholders with no
+    # associated observation evidence — keyword traceability check is skipped
+    # because no hypothesis is promoted and padded placeholders may not have
+    # matching signals in the (zero-observation) input.
+    is_unresolved_mode = all(h.rank_label == RankLabel.UNRESOLVED for h in result.hypotheses)
+    if not is_unresolved_mode:
+        for hypothesis in result.pre_ranking_hypotheses + result.hypotheses:
+            process_name = hypothesis.process_step or ""
+            if not process_name:
+                continue
+            keyword_hit = any(
+                _contains_phrase(current_input_text, keyword)
+                or _tokens_in_text(current_input_text, keyword)
+                for keyword in hypothesis.keywords
             )
+            if not keyword_hit:
+                errors.append(
+                    f"Hypothesis signals are not traceable to current input: {process_name}"
+                )
 
     for entry in reasoning_artifact.get("evidence_classification_table", []):
         if entry.get("tag") not in _ALLOWED_TAGS:
@@ -478,8 +498,10 @@ def _validate_result_against_current_input(
         if required_key not in reasoning_artifact:
             errors.append(f"Missing reasoning artifact key: {required_key}")
 
+    # Skip primary contradiction check in UNRESOLVED mode — no PRIMARY exists by design
+    is_unresolved = all(h.rank_label == RankLabel.UNRESOLVED for h in result.hypotheses)
     primary = next((hypothesis for hypothesis in result.hypotheses if hypothesis.rank_label == RankLabel.PRIMARY), None)
-    if primary is not None:
+    if primary is not None and not is_unresolved:
         primary_counts = _count_by_label(result.alignments, primary.id)
         if primary_counts["contradictory"] > 0:
             non_contradicted_exists = any(
@@ -535,6 +557,9 @@ def generate_report(
 
     _validate_result_against_current_input(result, reasoning_artifact)
 
+    # AG-3 Rev-C: in UNRESOLVED mode, hypothesis lines must NOT say "Primary Contributor"
+    is_unresolved_mode = all(h.rank_label == RankLabel.UNRESOLVED for h in result.hypotheses)
+
     hypothesis_lines = []
     for item in ranked_hypotheses:
         gap_note = " [data gaps present]" if item["gap_severity"] > 0 else ""
@@ -564,6 +589,19 @@ def generate_report(
             content=confidence_statement or FALLBACKS["confidence"],
         ),
     ]
+
+    # AG-4 Rev-C: add explicit Contradictions section when contradiction objects exist
+    # Report must NEVER omit contradictions or claim they are absent when they exist.
+    if contradiction_log:
+        contradiction_lines = [
+            f"[{entry['hypothesis']}] {entry['contradicting_evidence']} "
+            f"(Source: {entry['source']}) — {entry['reason']}"
+            for entry in contradiction_log
+        ]
+        sections.append(ReportSection(
+            title="Identified Contradictions",
+            content="\n".join(f"- {line}" for line in contradiction_lines),
+        ))
 
     lint_input = [(section.title, section.content) for section in sections]
     lint_result = lint_report(lint_input)

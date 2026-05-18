@@ -14,6 +14,14 @@ class AnalyzeResponse(BaseModel):
         default_factory=dict,
         description="Paths to generated report files (json, html, pdf)",
     )
+    # AG-1 Rev-C: source role audit proving expectation sources are gated
+    source_role_audit: list[dict] = Field(default_factory=list)
+    # AG-3 Rev-C: ranking mode — PROMOTED_PRIMARY or UNRESOLVED_COMPETING_HYPOTHESES
+    ranking_mode: str = "PROMOTED_PRIMARY"
+    # AG-8 Rev-C: image participation status — never silent
+    image_statuses: list[dict] = Field(default_factory=list)
+    # Crash-path: status field — "OK" or "FAILED_GRACEFULLY"
+    status: str = "OK"
 
 
 class HealthResponse(BaseModel):

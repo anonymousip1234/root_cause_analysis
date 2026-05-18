@@ -14,6 +14,9 @@ class RankLabel(str, Enum):
     CONDITIONAL_AMPLIFIER = "Conditional Amplifier"
     DEPRIORITIZED = "Deprioritized Alternative"
     UNRANKED = "Unranked"
+    # AG-3 Rev-C: when NO hypothesis has direct observation support, all are
+    # labeled UNRESOLVED and no Primary Contributor is shown.
+    UNRESOLVED = "Unresolved Competing Hypothesis"
 
 
 class Hypothesis(BaseModel):

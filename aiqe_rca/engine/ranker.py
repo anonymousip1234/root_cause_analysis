@@ -144,7 +144,28 @@ def rank_hypotheses(
             new_primary = supported[0]
             ranked = [new_primary] + [h for h in ranked if h.id != new_primary.id]
 
-    # --- Assign rank labels ---
+    # --- AG-3 Rev-C: all-unsupported fallback ---
+    # If NO hypothesis has at least one direct observation support alignment,
+    # the report must NOT label any hypothesis "Primary Contributor". All are
+    # labeled "Unresolved Competing Hypothesis" and confidence is forced LOW.
+    has_any_support = any(counts[h.id][0] > 0 for h in ranked)
+    if not has_any_support:
+        # Sort by fewest gaps → fewest contradictions → fewest weakenings → stable id
+        unresolved = sorted(
+            ranked,
+            key=lambda h: (
+                h.gap_severity,
+                counts[h.id][2],
+                counts[h.id][1],
+                h.id,
+            ),
+        )
+        for h in unresolved:
+            h.rank_label = RankLabel.UNRESOLVED
+        hypotheses[:] = unresolved
+        return hypotheses
+
+    # --- Assign rank labels (normal path — at least one supported hypothesis) ---
     secondary_assigned = False
     for index, h in enumerate(ranked):
         s, w, c, _ = counts[h.id]

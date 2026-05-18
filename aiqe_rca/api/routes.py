@@ -13,7 +13,6 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from aiqe_rca.api.schemas import (
     AnalyzeResponse,
     EmailReportRequest,
-    ErrorResponse,
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
@@ -123,17 +122,38 @@ async def analyze(request: Request):
     timestamp = datetime.now(timezone.utc).isoformat()
     report_id = f"rca-{uuid.uuid5(uuid.NAMESPACE_DNS, input_hash).hex[:12]}"
 
-    # Run deterministic analysis pipeline
+    # Run deterministic analysis pipeline — crash-path hardened per Rev-C Section 13
     try:
-        analysis_result = run_analysis(problem_statement, file_contents)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis engine error: {str(e)}",
+        analysis_result = run_analysis(
+            problem_statement,
+            file_contents,
+            _file_keys=sorted(file_contents.keys()),
         )
-
-    # Generate report
-    report = generate_report(analysis_result, input_hash, timestamp)
+        report = generate_report(analysis_result, input_hash, timestamp)
+    except HTTPException:
+        raise  # Re-raise FastAPI validation errors as-is
+    except Exception as exc:
+        logger.exception("Pipeline failure report_id=%s input_hash=%s", report_id, input_hash)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "FAILED_GRACEFULLY",
+                "phase2_status": "RED",
+                "report_id": report_id,
+                "input_hash": input_hash,
+                "confidence": "Low",
+                "ranking_mode": "FAILED",
+                "error_type": type(exc).__name__,
+                "error_detail": str(exc)[:400],
+                "source_role_audit": [],
+                "image_statuses": [],
+                "safe_message": (
+                    "AIQE analysis failed during report generation and returned a "
+                    "deterministic graceful failure state. No partial results are shown."
+                ),
+            },
+        )
 
     # Save report files
     try:
@@ -163,6 +183,10 @@ async def analyze(request: Request):
         confidence=analysis_result.confidence.value,
         report_json=report_json_dict,
         files=paths_str,
+        status="OK",
+        ranking_mode=analysis_result.ranking_mode,
+        source_role_audit=[e.model_dump() for e in analysis_result.source_role_audit],
+        image_statuses=[s.model_dump() for s in analysis_result.image_statuses],
     )
 
 

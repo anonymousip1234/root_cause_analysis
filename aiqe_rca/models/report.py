@@ -1,7 +1,7 @@
 """Report output data models."""
 
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,24 @@ class ReportHeader(BaseModel):
     analysis_confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM
 
 
+class ImageStatus(BaseModel):
+    """AG-8 Rev-C: explicit status for every uploaded image — never silent."""
+
+    filename: str
+    status: Literal["CONTRIBUTORY", "NON_CONTRIBUTORY", "NOT_PROCESSED", "FAIL"]
+    reason: str
+    created_evidence_item_ids: list[str] = Field(default_factory=list)
+
+
+class SourceRoleAuditEntry(BaseModel):
+    """AG-1 Rev-C: per-source audit record proving expectation sources are gated."""
+
+    filename: str
+    source_role: Literal["EXPECTATION", "OBSERVATION", "CONTEXT"]
+    created_evidence_items: int = 0
+    evidence_creation_allowed: bool = True
+
+
 class AnalysisResult(BaseModel):
     """Complete output of the deterministic engine pipeline (pre-report)."""
 
@@ -39,6 +57,12 @@ class AnalysisResult(BaseModel):
     confidence: ConfidenceLevel
     header: ReportHeader
     problem_statement: str
+    # AG-3 Rev-C: ranking mode signals whether promotion succeeded or fell back
+    ranking_mode: Literal["PROMOTED_PRIMARY", "UNRESOLVED_COMPETING_HYPOTHESES"] = "PROMOTED_PRIMARY"
+    # AG-1 Rev-C: source role audit proving PFMEA/CP are gated
+    source_role_audit: list[SourceRoleAuditEntry] = Field(default_factory=list)
+    # AG-8 Rev-C: image participation status
+    image_statuses: list[ImageStatus] = Field(default_factory=list)
 
 
 class ReportSection(BaseModel):

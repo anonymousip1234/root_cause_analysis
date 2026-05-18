@@ -17,6 +17,10 @@ def assess_confidence(
     if not hypotheses or not alignments:
         return ConfidenceLevel.LOW
 
+    # AG-3 Rev-C: all-unsupported mode → always LOW
+    if all(h.rank_label == RankLabel.UNRESOLVED for h in hypotheses):
+        return ConfidenceLevel.LOW
+
     primary = next((hypothesis for hypothesis in hypotheses if hypothesis.rank_label == RankLabel.PRIMARY), None)
     if primary is None:
         return ConfidenceLevel.LOW
