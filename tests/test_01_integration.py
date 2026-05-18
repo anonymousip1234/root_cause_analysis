@@ -194,7 +194,20 @@ def test_confidence_is_medium_for_indirect_but_directional_case():
 def test_report_has_5_sections_and_clean_language():
     _, report, _ = _run_report()
 
-    assert len(report.sections) == 5
+    # Rev-C AG-4: a 6th "Identified Contradictions" section is appended when
+    # contradiction objects exist, so the count is 5 or 6.
+    assert len(report.sections) >= 5
+    required_titles = {
+        "Executive Diagnostic Summary",
+        "Most Likely Root Cause Hypotheses",
+        "Diagnostic Evidence",
+        "Recommended Testing / Validation",
+        "Analysis Confidence Statement",
+    }
+    section_titles = {section.title for section in report.sections}
+    assert required_titles.issubset(section_titles), (
+        f"Missing required sections: {required_titles - section_titles}"
+    )
     lint_input = [(section.title, section.content) for section in report.sections]
     lint_result = lint_report(lint_input)
     assert lint_result.passed
