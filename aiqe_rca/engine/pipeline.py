@@ -14,9 +14,12 @@ Critical invariant: PFMEA, Control Plan, and any other EXPECTATION-role source
 (v3 spec Section 5 and Section 14)
 """
 
+import logging
 import re
 
 from aiqe_rca.config import settings
+
+logger = logging.getLogger(__name__)
 from aiqe_rca.engine.alignment_classifier import classify_all_alignments
 from aiqe_rca.engine.confidence import assess_confidence
 from aiqe_rca.engine.evidence_associator import associate_evidence
@@ -177,43 +180,62 @@ def _extract_header_fields(
     evidence_elements: list[EvidenceElement],
     confidence: ConfidenceLevel,
 ) -> ReportHeader:
-    """Extract report header fields from inputs."""
+    """Extract report header fields from inputs.
+
+    All regex operations are individually guarded — a malformed evidence element
+    must never crash header extraction (Rev-C crash-path hardening).
+    """
     header = ReportHeader(analysis_confidence=confidence)
 
-    part_pattern = r"(?:Part|Product|Component|Assembly)[:\s]+([^\n;]{5,80})"
-    for e in evidence_elements:
-        match = re.search(part_pattern, e.text_content, re.IGNORECASE)
-        if match:
-            header.part_process = match.group(1).strip()
-            break
+    try:
+        part_pattern = r"(?:Part|Product|Component|Assembly)[:\s]+([^\n;]{5,80})"
+        for e in evidence_elements:
+            try:
+                match = re.search(part_pattern, e.text_content or "", re.IGNORECASE)
+                if match:
+                    header.part_process = match.group(1).strip()
+                    break
+            except Exception:
+                continue
 
-    if header.part_process == "Not available from current inputs.":
-        ps_match = re.search(part_pattern, problem_statement, re.IGNORECASE)
-        if ps_match:
-            header.part_process = ps_match.group(1).strip()
+        if header.part_process == "Not available from current inputs.":
+            ps_match = re.search(part_pattern, problem_statement or "", re.IGNORECASE)
+            if ps_match:
+                header.part_process = ps_match.group(1).strip()
+    except Exception:
+        logger.exception("Header part/process extraction failed (non-fatal)")
 
-    if problem_statement.strip():
-        first_sentence = problem_statement.split(".")[0].strip()
-        if len(first_sentence) > 150:
-            first_sentence = first_sentence[:150] + "..."
-        header.defect_symptom = first_sentence
+    try:
+        if problem_statement and problem_statement.strip():
+            first_sentence = problem_statement.split(".")[0].strip()
+            if len(first_sentence) > 150:
+                first_sentence = first_sentence[:150] + "..."
+            header.defect_symptom = first_sentence
+    except Exception:
+        logger.exception("Header defect/symptom extraction failed (non-fatal)")
 
-    date_pattern = r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b"
-    dates_found: list[str] = []
-    for e in evidence_elements:
-        dates_found.extend(re.findall(date_pattern, e.text_content))
-    if len(dates_found) >= 2:
-        dates_found.sort()
-        header.date_range = f"{dates_found[0]} to {dates_found[-1]}"
-    elif len(dates_found) == 1:
-        header.date_range = dates_found[0]
-
-    ps_dates = re.findall(date_pattern, problem_statement)
-    if ps_dates and header.date_range == "Not available from current inputs.":
-        ps_dates.sort()
-        header.date_range = (
-            f"{ps_dates[0]} to {ps_dates[-1]}" if len(ps_dates) >= 2 else ps_dates[0]
-        )
+    try:
+        date_pattern = r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b"
+        dates_found: list[str] = []
+        for e in evidence_elements:
+            try:
+                dates_found.extend(re.findall(date_pattern, e.text_content or ""))
+            except Exception:
+                continue
+        if len(dates_found) >= 2:
+            dates_found.sort()
+            header.date_range = f"{dates_found[0]} to {dates_found[-1]}"
+        elif len(dates_found) == 1:
+            header.date_range = dates_found[0]
+        else:
+            ps_dates = re.findall(date_pattern, problem_statement or "")
+            if ps_dates:
+                ps_dates.sort()
+                header.date_range = (
+                    f"{ps_dates[0]} to {ps_dates[-1]}" if len(ps_dates) >= 2 else ps_dates[0]
+                )
+    except Exception:
+        logger.exception("Header date range extraction failed (non-fatal)")
 
     return header
 
@@ -234,14 +256,23 @@ def run_analysis(
     """
     # -----------------------------------------------------------------------
     # Step 1 — Parse all documents into evidence elements
+    # (individual file failures are skipped — never abort the whole pipeline)
     # -----------------------------------------------------------------------
     evidence_elements = parse_multiple_files(files)
+
+    # Defensive: ensure every element has non-None text_content
+    for _ev in evidence_elements:
+        if not _ev.text_content:
+            _ev.text_content = ""
 
     # -----------------------------------------------------------------------
     # Step 1b — Categorize evidence (DR/PC/PV/DA/RC/UN)
     # Must run before the source role gate so PFMEA/CP are identified.
     # -----------------------------------------------------------------------
-    evidence_elements = categorize_evidence(evidence_elements)
+    try:
+        evidence_elements = categorize_evidence(evidence_elements)
+    except Exception:
+        logger.exception("Evidence categorization failed — continuing with UNCATEGORIZED evidence.")
 
     # -----------------------------------------------------------------------
     # SOURCE ROLE GATE — separate EXPECTATION from OBSERVATION sources.
@@ -260,12 +291,14 @@ def run_analysis(
 
     # -----------------------------------------------------------------------
     # Step 2b — Build pattern facts from OBSERVATION evidence only.
-    # Pattern facts detect higher-level patterns (INTERMITTENT_FAILURE,
-    # NO_SINGLE_VARIABLE_SEPARATION, etc.) that trigger stack-up / temporal /
-    # detection-gap hypotheses (v3 spec Section 6 & 7).
     # -----------------------------------------------------------------------
-    pattern_facts = build_pattern_facts(observation_evidence)
-    pattern_hypotheses = generate_pattern_hypotheses(pattern_facts)
+    try:
+        pattern_facts = build_pattern_facts(observation_evidence)
+        pattern_hypotheses = generate_pattern_hypotheses(pattern_facts)
+    except Exception:
+        logger.exception("Pattern fact building failed — continuing without pattern-triggered hypotheses.")
+        pattern_facts = []
+        pattern_hypotheses = []
 
     # -----------------------------------------------------------------------
     # Step 2c — Merge pattern-triggered and signal-group hypotheses.

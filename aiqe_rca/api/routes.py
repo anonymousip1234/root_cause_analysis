@@ -122,19 +122,21 @@ async def analyze(request: Request):
     timestamp = datetime.now(timezone.utc).isoformat()
     report_id = f"rca-{uuid.uuid5(uuid.NAMESPACE_DNS, input_hash).hex[:12]}"
 
-    # Run deterministic analysis pipeline — crash-path hardened per Rev-C Section 13
-    try:
-        analysis_result = run_analysis(
-            problem_statement,
-            file_contents,
-            _file_keys=sorted(file_contents.keys()),
+    # -----------------------------------------------------------------------
+    # Rev-C §13 — Comprehensive crash-proof execution wrapper.
+    # Every code path below MUST return either a valid AnalyzeResponse or a
+    # deterministic FAILED_GRACEFULLY JSON payload. Blank-screen failures are
+    # never acceptable. Each sub-step is independently guarded so a failure
+    # in audit saving, JSON rendering, or response construction cannot prevent
+    # a response from reaching the caller.
+    # -----------------------------------------------------------------------
+    from fastapi.responses import JSONResponse
+
+    def _graceful_failure(exc: Exception, stage: str) -> JSONResponse:
+        logger.exception(
+            "Pipeline failure at stage=%s report_id=%s input_hash=%s",
+            stage, report_id, input_hash,
         )
-        report = generate_report(analysis_result, input_hash, timestamp)
-    except HTTPException:
-        raise  # Re-raise FastAPI validation errors as-is
-    except Exception as exc:
-        logger.exception("Pipeline failure report_id=%s input_hash=%s", report_id, input_hash)
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=200,
             content={
@@ -144,50 +146,87 @@ async def analyze(request: Request):
                 "input_hash": input_hash,
                 "confidence": "Low",
                 "ranking_mode": "FAILED",
+                "failed_stage": stage,
                 "error_type": type(exc).__name__,
                 "error_detail": str(exc)[:400],
                 "source_role_audit": [],
                 "image_statuses": [],
                 "safe_message": (
-                    "AIQE analysis failed during report generation and returned a "
-                    "deterministic graceful failure state. No partial results are shown."
+                    "AIQE analysis failed and returned a deterministic graceful "
+                    "failure state. Stage: " + stage
                 ),
             },
         )
 
-    # Save report files
+    # Step A — Run deterministic analysis pipeline
+    analysis_result = None
+    try:
+        analysis_result = run_analysis(
+            problem_statement,
+            file_contents,
+            _file_keys=sorted(file_contents.keys()),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return _graceful_failure(exc, "run_analysis")
+
+    # Step B — Generate structured report
+    report = None
+    try:
+        report = generate_report(analysis_result, input_hash, timestamp)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return _graceful_failure(exc, "generate_report")
+
+    # Step C — Save report files (non-critical; failure does not block response)
+    paths_str: dict[str, str] = {}
     try:
         file_paths = save_report(report, report_id)
         paths_str = {fmt: str(p) for fmt, p in file_paths.items()}
     except Exception:
-        paths_str = {}
+        logger.exception("Report file save failed for %s (non-critical)", report_id)
 
-    # Build audit record
-    audit_record = build_audit_record(report, sorted(file_contents.keys()))
+    # Step D — Persist audit record (non-critical; failure does not block response)
+    try:
+        audit_record = build_audit_record(report, sorted(file_contents.keys()))
+        audit_dir = settings.reports_dir / "audit"
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        (audit_dir / f"{report_id}_audit.json").write_text(
+            audit_record.model_dump_json(indent=2), encoding="utf-8"
+        )
+    except Exception:
+        logger.exception("Audit record save failed for %s (non-critical)", report_id)
 
-    # Save audit record
-    audit_dir = settings.reports_dir / "audit"
-    audit_dir.mkdir(parents=True, exist_ok=True)
-    audit_path = audit_dir / f"{report_id}_audit.json"
-    audit_path.write_text(
-        audit_record.model_dump_json(indent=2), encoding="utf-8"
-    )
+    # Step E — Render report to JSON for response payload
+    report_json_dict: dict = {}
+    try:
+        report_json_str = render_json(report)
+        report_json_dict = json.loads(report_json_str)
+    except Exception as exc:
+        logger.exception("Report JSON render failed for %s", report_id)
+        report_json_dict = {
+            "report_id": report_id,
+            "status": "render_failed",
+            "error": str(exc)[:200],
+        }
 
-    # Parse report JSON for response
-    report_json_str = render_json(report)
-    report_json_dict = json.loads(report_json_str)
-
-    return AnalyzeResponse(
-        report_id=report_id,
-        input_hash=input_hash,
-        confidence=analysis_result.confidence.value,
-        report_json=report_json_dict,
-        files=paths_str,
-        status="OK",
-        ranking_mode=analysis_result.ranking_mode,
-        source_role_audit=[e.model_dump() for e in analysis_result.source_role_audit],
-        image_statuses=[s.model_dump() for s in analysis_result.image_statuses],
-    )
+    # Step F — Build and return the structured response
+    try:
+        return AnalyzeResponse(
+            report_id=report_id,
+            input_hash=input_hash,
+            confidence=analysis_result.confidence.value,
+            report_json=report_json_dict,
+            files=paths_str,
+            status="OK",
+            ranking_mode=analysis_result.ranking_mode,
+            source_role_audit=[e.model_dump() for e in analysis_result.source_role_audit],
+            image_statuses=[s.model_dump() for s in analysis_result.image_statuses],
+        )
+    except Exception as exc:
+        return _graceful_failure(exc, "response_construction")
 
 
 @router.get("/report/{report_id}")

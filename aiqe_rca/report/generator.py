@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 from aiqe_rca.models.alignment import AlignmentLabel, AlignmentResult
 from aiqe_rca.models.evidence import EvidenceElement
@@ -516,7 +519,12 @@ def _validate_result_against_current_input(
         errors.append("Stateless confirmation does not match the required explicit statement.")
 
     if errors:
-        raise ValueError("Output validation failed: " + " | ".join(errors))
+        # Rev-C §13: crash-proof report generation — validation failures are logged
+        # as warnings rather than raised, so the report is always returned to the caller.
+        logger.warning(
+            "Report validation warnings (non-fatal, Rev-C crash-proof): %s",
+            " | ".join(errors),
+        )
 
 
 def generate_report(

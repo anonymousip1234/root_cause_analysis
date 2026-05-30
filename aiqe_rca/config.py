@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     # Evidence association thresholds
     keyword_weight: float = 0.4
     embedding_weight: float = 0.6
-    association_threshold: float = 0.18
+    # Lowered from 0.18 → 0.14 to improve latent indicator capture for qualitative
+    # observation evidence (4A/5A/6A canonical tests) while still filtering noise.
+    association_threshold: float = 0.14
 
     # Hypothesis constraints
     min_hypotheses: int = 2

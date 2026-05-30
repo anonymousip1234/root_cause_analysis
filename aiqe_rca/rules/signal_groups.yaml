@@ -119,9 +119,26 @@ signal_groups:
       - control plan gap
       - inspection gap
       - detection gap
+      - field return
+      - customer complaint
+      - escaped inspection
+      - found at customer
+      - downstream detection
+      - post-shipment
+      - warranty return
+      - final inspection
+      - no dimensional check
+      - no functional check
+      - no audit
+      - escaped
+      - not detected
+      - field failure
     contradicting_signals:
       - inspection verified
       - 100% inspection
+      - inspection caught all defects
+      - no detection gap identified
+      - full dimensional check
     expected_conditions:
       - defects escaped inspection
       - no measurement recorded
@@ -130,6 +147,9 @@ signal_groups:
       - detection gap confirmed
       - quantitative check absent
       - coverage verification missing
+      - defect found after passing inspection
+      - customer return after passing final check
+      - downstream failure despite upstream pass
 
   - id: SG_ENVIRONMENTAL_STORAGE
     name: "environmental or storage conditions that could be contributing as an amplifier"
@@ -204,6 +224,13 @@ signal_groups:
       - profile
       - pressure variation
       - temperature variation
+      - temperature spike
+      - high temperature
+      - elevated temperature
+      - thermal
+      - heat
+      - temperature deviation
+      - temperature exceedance
     contradicting_signals:
       - no recorded changes to cure time or cure temperature
       - no consistent shift in cure temperature or time
@@ -224,6 +251,9 @@ signal_groups:
       - dwell time variation
       - temperature variation recorded
       - parameter out of range
+      - temperature spike observed
+      - elevated temperature correlated with failure
+      - high temperature run failed
 
   - id: SG_EQUIPMENT_SETUP_VARIATION
     name: "equipment or setup variation that may be contributing as a competing factor"
@@ -238,12 +268,28 @@ signal_groups:
       - equipment condition
       - mechanical wear
       - press malfunction
+      - loose
+      - clamping
+      - slippage
+      - backlash
+      - setup change
+      - changeover
+      - tooling change
+      - worn tooling
+      - wear marks
+      - setup variation
+      - equipment wear
+      - runout
+      - vibration
+      - chatter marks
     contradicting_signals:
       - no clear correlation to cavity, press, or batch
       - no single press or cavity correlation
       - multi-tool occurrence
       - across multiple tools
       - no equipment correlation
+      - equipment checked and within spec
+      - no equipment anomaly
     expected_conditions:
       - cavity specific pattern
       - press specific occurrence
@@ -252,6 +298,9 @@ signal_groups:
       - maintenance overdue
       - mechanical wear evidence
       - press malfunction recorded
+      - tooling wear observed
+      - clamping or fixture anomaly identified
+      - setup variation between runs
 
   - id: SG_OPERATOR_PROCESS_VARIATION
     name: "operator or manual process variation that may be introducing inconsistency"
@@ -302,11 +351,28 @@ signal_groups:
       - material variability
       - resin
       - substrate
+      - lot number
+      - heat lot
+      - material certificate
+      - substrate variation
+      - supplier change
+      - supplier quality
+      - incoming quality
+      - rejected lot
+      - batch change
+      - material change
+      - coating
+      - hardness
+      - surface texture
     contradicting_signals:
       - material certified
       - incoming inspection passed
       - no lot variation identified
       - material within specification
+      - no material change
+      - lot traceability confirmed
+      - no incoming material deviation
+      - material properties confirmed consistent
     expected_conditions:
       - lot to lot variation observed
       - incoming material deviation
@@ -315,6 +381,9 @@ signal_groups:
       - supplier certificate deviation
       - shelf life exceedance
       - substrate condition variation
+      - material difference between batches
+      - incoming quality issue identified
+      - coating or surface variation observed
 
   - id: SG_COMPOUNDING_MULTI_FACTOR
     name: "compounding multi-factor interaction where two or more contributors may be co-active"
