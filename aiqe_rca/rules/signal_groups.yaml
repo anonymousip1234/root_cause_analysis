@@ -255,6 +255,64 @@ signal_groups:
       - elevated temperature correlated with failure
       - high temperature run failed
 
+  - id: SG_PRESS_FIT_RETENTION
+    name: "press-fit engagement or retention interaction variation that could affect assembly retention"
+    signals:
+      - press-fit
+      - press fit
+      - interference fit
+      - press engagement
+      - seating depth
+      - seating height
+      - press force
+      - insertion force
+      - retention force
+      - pull-out force
+      - push-out force
+      - force-displacement
+      - force displacement
+      - retention interaction
+      - assembly press
+      - press depth
+      - under-seated
+      - under seated
+      - over-seated
+      - over seated
+      - seating variation
+      - retention degradation
+      - press load
+      - component seating
+      - retention strength
+      - press stroke
+      - engagement length
+      - press-in
+      - retention margin
+      - assembly condition variation
+      - seating engagement
+    contradicting_signals:
+      - press force remained within specification
+      - press force within limits
+      - seating depth within tolerance
+      - seating depth confirmed within tolerance
+      - retention force within specification
+      - no retention variation
+      - press parameters remained stable
+      - retention force verified within spec
+    expected_conditions:
+      - press force variation observed
+      - seating depth variation
+      - retention force below specification
+      - retention force degradation
+      - insertion force out of range
+      - pull-out force reduced
+      - assembly press force inconsistent
+      - component under-seated
+      - component over-seated
+      - force-displacement curve deviation
+      - press engagement variation between assemblies
+      - retention interaction failure
+      - seating depth out of tolerance
+
   - id: SG_EQUIPMENT_SETUP_VARIATION
     name: "equipment or setup variation that may be contributing as a competing factor"
     signals:
@@ -290,6 +348,9 @@ signal_groups:
       - no equipment correlation
       - equipment checked and within spec
       - no equipment anomaly
+      - no consistent correlation with tooling condition
+      - no correlation with tooling condition
+      - no correlation to tooling condition
     expected_conditions:
       - cavity specific pattern
       - press specific occurrence
@@ -373,6 +434,11 @@ signal_groups:
       - lot traceability confirmed
       - no incoming material deviation
       - material properties confirmed consistent
+      - no consistent correlation with material lot
+      - no correlation with material lot
+      - no correlation to material lot
+      - no material lot correlation
+      - material lot ruled out
     expected_conditions:
       - lot to lot variation observed
       - incoming material deviation
