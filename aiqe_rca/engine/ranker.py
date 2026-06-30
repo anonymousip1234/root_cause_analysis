@@ -129,6 +129,7 @@ def rank_hypotheses(
             primary_tier,
             -int(s > 0),          # prefer supported over unsupported within tier
             c,                     # fewer contradictions is better
+            -s,                     # more supporting evidence is better (within same tier/contradiction count)
             w,                     # fewer weakenings is better
             h.gap_severity,        # fewer gap penalties is better
             h.id,                  # stable tiebreaker
